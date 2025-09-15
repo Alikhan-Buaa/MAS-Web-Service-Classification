@@ -1,0 +1,29 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Data directories
+Phase-01/web_services_classification/data/analysis/
+Phase-01/web_services_classification/data/preprocessed/
+Phase-01/web_services_classification/data/features/
+
+# Models and results
+Phase-01/web_services_classification/models/
+Phase-01/web_services_classification/results/
+
+# Logs
+Phase-01/web_services_classification/logs/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+.vencent
+Phase-01/.vencent
