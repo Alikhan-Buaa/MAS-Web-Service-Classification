@@ -19,7 +19,7 @@ from src.preprocessing.data_analysis import DataAnalyzer
 from src.preprocessing.data_preprocessing import DataPreprocessor
 from src.preprocessing.feature_extraction import FeatureExtractor
 from src.modeling.ml_models import MLModelTrainer
-#from src.modeling.dl_model import DLModelTrainer
+from src.modeling.dl_models import DLModelTrainer
 #from src.evaluation.evaluation import ModelEvaluator
 #from src.evaluation.topk_evaluation import TopKEvaluator
 #from src.evaluation.benchmark_generator import BenchmarkGenerator
@@ -98,6 +98,7 @@ def run_dl_training_phase():
     # Train all DL models for all category sizes
     logger.info(f"Training DL models")
     results = dl_trainer.train_all_categories()
+    results = dl_trainer.plot_dl_results_only()
     logger.info("DL Training Phase completed")
     return results
 
