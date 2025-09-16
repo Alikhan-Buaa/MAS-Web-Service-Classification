@@ -36,6 +36,9 @@ RANDOM_SEED = 42                       # Global seed for reproducibility
 DATA_CONFIG = {
     # Input data
     "raw_data_path": DATA_PATH / "raw" / "web_services_dataset.csv",
+    
+    # Processed data path (added for DL models)
+    "processed_data_path": DATA_PATH / "processed",
 
     # Column names (adjust if CSV schema changes)
     "text_column": "Service Description",          # service description text
@@ -175,15 +178,66 @@ ML_CONFIG = {
 }
 
 # =============================================================================
+# Deep Learning Configuration
+# =============================================================================
+DL_CONFIG = {
+    # Model architectures to train
+    "models": ["bilstm"],
+    
+    # Feature types to use
+    "feature_types": ["tfidf", "sbert"],
+    
+    # BiLSTM model parameters
+    "bilstm": {
+        "lstm_units": 128,
+        "dropout_rate": 0.3,
+        "learning_rate": 0.001,
+        "batch_size": 32,
+        "epochs": 50,
+        "patience": 10,
+        "validation_split": 0.2,
+        "optimizer": "adam",
+        "loss": "categorical_crossentropy",
+        "metrics": ["accuracy"]
+    },
+    
+    # Training callbacks
+    "callbacks": {
+        "early_stopping": {
+            "monitor": "val_accuracy",
+            "patience": 10,
+            "restore_best_weights": True
+        },
+        "reduce_lr": {
+            "monitor": "val_loss",
+            "factor": 0.5,
+            "patience": 5,
+            "min_lr": 1e-7
+        },
+        "model_checkpoint": {
+            "monitor": "val_accuracy",
+            "save_best_only": True,
+            "save_weights_only": False
+        }
+    }
+}
+
+# =============================================================================
 # ML Models & Results Storage - Uniform top_{n}_categories naming
 # =============================================================================
 SAVED_MODELS_CONFIG = {
     "ml_models_path": MODELS_PATH / "ml",  # trained ML models
+    "dl_models_path": MODELS_PATH / "dl",  # trained DL models
 }
 
 RESULTS_CONFIG = {
+    # ML Results
     "ml_results_path": RESULTS_PATH / "ml",           # per-model results
     "ml_comparisons_path": RESULTS_PATH / "ml_comparisons",  # cross-model comparisons
+    
+    # DL Results
+    "dl_results_path": RESULTS_PATH / "dl",           # per-model DL results
+    "dl_comparisons_path": RESULTS_PATH / "dl_comparisons",  # cross-model DL comparisons
 
     # File naming patterns - uniform top_{n}_categories naming
     "model_results_pattern": "{model_name}_{feature_type}_top_{n}_categories",
@@ -195,6 +249,15 @@ RESULTS_CONFIG = {
         30: RESULTS_PATH / "ml" / "top_30_categories", 
         40: RESULTS_PATH / "ml" / "top_40_categories", 
         50: RESULTS_PATH / "ml" / "top_50_categories",
+    },
+    
+    # DL Category-wise results directories (same structure as ML)
+    "dl_category_paths": {
+        10: RESULTS_PATH / "dl" / "top_10_categories",
+        20: RESULTS_PATH / "dl" / "top_20_categories", 
+        30: RESULTS_PATH / "dl" / "top_30_categories",
+        40: RESULTS_PATH / "dl" / "top_40_categories",
+        50: RESULTS_PATH / "dl" / "top_50_categories",
     }
 }
 
@@ -209,7 +272,10 @@ for path in [
     RESULTS_PATH,
     LOGS_PATH,
     RESULTS_PATH / "ml",
-    RESULTS_PATH / "ml_comparisons"
+    RESULTS_PATH / "ml_comparisons",
+    RESULTS_PATH / "dl",
+    RESULTS_PATH / "dl_comparisons",
+    MODELS_PATH / "dl",
 ]:
     path.mkdir(parents=True, exist_ok=True)
 
@@ -222,7 +288,9 @@ for n in CATEGORY_SIZES:
         FEATURES_PATH / "tfidf" / f"top_{n}_categories",
         FEATURES_PATH / "sbert" / f"top_{n}_categories",
         MODELS_PATH / "ml" / f"top_{n}_categories",
-        RESULTS_PATH / "ml" / f"top_{n}_categories"
+        MODELS_PATH / "dl" / f"top_{n}_categories",
+        RESULTS_PATH / "ml" / f"top_{n}_categories",
+        RESULTS_PATH / "dl" / f"top_{n}_categories"
     ]
     for path in category_paths:
         path.mkdir(parents=True, exist_ok=True)
