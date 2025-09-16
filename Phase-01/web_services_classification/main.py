@@ -18,7 +18,7 @@ from src.config import (
 from src.preprocessing.data_analysis import DataAnalyzer
 from src.preprocessing.data_preprocessing import DataPreprocessor
 from src.preprocessing.feature_extraction import FeatureExtractor
-#from src.modeling.ml_models import MLModelTrainer
+from src.modeling.ml_models import MLModelTrainer
 #from src.modeling.dl_model import DLModelTrainer
 #from src.evaluation.evaluation import ModelEvaluator
 #from src.evaluation.topk_evaluation import TopKEvaluator
