@@ -180,6 +180,7 @@ pip install -r requirements.txt
 pip install sentence-transformers
 
 # 6. Verify installation
+python -m nltk.downloader punkt stopwords wordnet averaged_perceptron_tagger
 python -c "import tensorflow; print('TensorFlow version:', tensorflow.__version__)"
 python -c "import sentence_transformers; print('SBERT installed successfully')"
 ```
