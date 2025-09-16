@@ -20,8 +20,8 @@ from src.preprocessing.data_preprocessing import DataPreprocessor
 from src.preprocessing.feature_extraction import FeatureExtractor
 from src.modeling.ml_models import MLModelTrainer
 from src.modeling.dl_models import DLModelTrainer
-#from src.evaluation.evaluation import ModelEvaluator
-#from src.evaluation.topk_evaluation import TopKEvaluator
+from src.evaluation.evaluate import ModelEvaluator
+from src.evaluation.overall_comparison import OverallPerformanceAnalyzer
 #from src.evaluation.benchmark_generator import BenchmarkGenerator
 from src.utils.utils import setup_logging
 
@@ -75,64 +75,99 @@ def run_feature_extraction_phase(categories=None, feature_types=None):
         
 
 def run_ml_training_phase():
-    """Run ML model training phase"""
+    """Run ML model training phase with automatic visualization"""
     logger = logging.getLogger(__name__)
     logger.info("Starting ML Training Phase")
     
     ml_trainer = MLModelTrainer()
     
-    # Train all ML models for all category sizes
-    ml_trainer.train_all_categories()
-    ml_trainer.plot_ml_results_only()
+    # Train all ML models for all category sizes (includes automatic visualization)
+    results = ml_trainer.train_all_categories()
     
-    logger.info("ML Training Phase completed")
-    return
+    logger.info("ML Training Phase completed (with visualizations)")
+    return results
 
 def run_dl_training_phase():
-    """Run DL model training phase"""
+    """Run DL model training phase with automatic visualization"""
     logger = logging.getLogger(__name__)
     logger.info("Starting DL Training Phase")
     
     dl_trainer = DLModelTrainer()
     
-    # Train all DL models for all category sizes
-    logger.info(f"Training DL models")
+    # Train all DL models for all category sizes (includes automatic visualization)
     results = dl_trainer.train_all_categories()
-    results = dl_trainer.plot_dl_results_only()
-    logger.info("DL Training Phase completed")
+    
+    logger.info("DL Training Phase completed (with visualizations)")
     return results
 
 
 def run_evaluation_phase():
-    """Run model evaluation phase"""
+    """Run comprehensive model evaluation and comparison phase"""
     logger = logging.getLogger(__name__)
     logger.info("Starting Evaluation Phase")
     
     evaluator = ModelEvaluator()
-    topk_evaluator = TopKEvaluator()
     
-    # Evaluate all models
-    for n_categories in CATEGORY_SIZES:
-        logger.info(f"Evaluating models for top {n_categories} categories")
+    try:
+        # Generate ML model analysis
+        logger.info("Generating ML model analysis...")
+        from src.config import RESULTS_CONFIG
+        ml_results_file = RESULTS_CONFIG["ml_comparisons_path"] / "ml_final_results.pkl"
+        ml_charts_dir = RESULTS_CONFIG["ml_comparisons_path"] / "charts"
         
-        # Standard evaluation
-        evaluator.evaluate_all_models(n_categories)
+        if ml_results_file.exists():
+            evaluator.plot_results_comparison(ml_results_file, ml_charts_dir, "ml")
+            evaluator.generate_radar_plots("ml")
+            logger.info("ML model analysis completed")
+        else:
+            logger.warning("ML results file not found, skipping ML analysis")
         
-        # Top-K evaluation
-        topk_evaluator.evaluate_all_models(n_categories)
+        # Generate DL model analysis
+        logger.info("Generating DL model analysis...")
+        dl_results_file = RESULTS_CONFIG["dl_comparisons_path"] / "dl_final_results.pkl"
+        dl_charts_dir = RESULTS_CONFIG["dl_comparisons_path"] / "charts"
+        
+        if dl_results_file.exists():
+            evaluator.plot_results_comparison(dl_results_file, dl_charts_dir, "dl")
+            evaluator.generate_radar_plots("dl")
+            logger.info("DL model analysis completed")
+        else:
+            logger.warning("DL results file not found, skipping DL analysis")
+            
+    except Exception as e:
+        logger.error(f"Error in evaluation phase: {e}")
+        print(f"Warning: Some evaluation steps may have failed: {e}")
     
     logger.info("Evaluation Phase completed")
 
+def run_visualize_phase():
+    """Run overall performance visualization phase (ML vs DL comparisons)"""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Overall Performance Visualization Phase")
+    
+    try:
+        analyzer = OverallPerformanceAnalyzer()
+        analyzer.generate_all_comparisons()
+        
+        logger.info("Overall Performance Visualization Phase completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in overall visualization phase: {e}")
+        print(f"Warning: Overall visualization phase encountered errors: {e}")
+    
+    logger.info("Overall Performance Visualization Phase completed")
 
 def run_benchmark_generation_phase():
     """Run benchmark generation phase"""
     logger = logging.getLogger(__name__)
     logger.info("Starting Benchmark Generation Phase")
     
-    benchmark_generator = BenchmarkGenerator()
-    
-    # Generate comprehensive benchmarks
-    benchmark_generator.generate_all_benchmarks()
+    # TODO: Implement benchmark generation
+    print("Benchmark generation phase - to be implemented")
+    print("This will generate:")
+    print("- Performance benchmarks across all models")
+    print("- Comparison tables and reports")
+    print("- Model ranking and recommendations")
     
     logger.info("Benchmark Generation Phase completed")
 
@@ -144,7 +179,7 @@ def main():
         "--phase", 
         choices=[
             "all", "analysis", "preprocessing", "features", "ml_training", 
-            "dl_training", "evaluation", "benchmarks"
+            "dl_training", "evaluation", "visualize", "benchmarks"
         ],
         default="all",
         help="Which phase to run"
@@ -178,12 +213,14 @@ def main():
         
         # Run specified phase(s)
         if args.phase == "all":
+            print("Running complete pipeline...")
             run_data_analysis_phase()
             run_preprocessing_phase()
             run_feature_extraction_phase()
             run_ml_training_phase()
             run_dl_training_phase()
             run_evaluation_phase()
+            run_visualize_phase()
             run_benchmark_generation_phase()
         elif args.phase == "analysis":
             run_data_analysis_phase()
@@ -197,13 +234,18 @@ def main():
             run_dl_training_phase()
         elif args.phase == "evaluation":
             run_evaluation_phase()
+        elif args.phase == "visualize":
+            run_visualize_phase()
         elif args.phase == "benchmarks":
             run_benchmark_generation_phase()
         
         logger.info("Pipeline completed successfully")
         print(f"\nPipeline completed successfully!")
         print(f"Check the logs directory for detailed logs.")
-        print(f"Check the results directory for outputs.")
+        print(f"Check the results directory for outputs:")
+        print(f"  - ML results: results/ml/comparisons/")
+        print(f"  - DL results: results/dl/comparisons/")
+        print(f"  - Individual category results: results/ml|dl/top_X_categories/")
         
     except Exception as e:
         logger.error(f"Pipeline failed: {str(e)}", exc_info=True)
