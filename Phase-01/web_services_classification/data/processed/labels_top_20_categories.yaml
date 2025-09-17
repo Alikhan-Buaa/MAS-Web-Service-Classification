@@ -1,0 +1,65 @@
+categories:
+- Mapping
+- eCommerce
+- Messaging
+- Tools
+- Payments
+- Enterprise
+- Government
+- Financial
+- Social
+- Science
+- Telephony
+- Transportation
+- Sports
+- Security
+- Email
+- Search
+- Travel
+- Reference
+- Advertising
+- Video
+id_to_label:
+  0: Advertising
+  1: Email
+  2: Enterprise
+  3: Financial
+  4: Government
+  5: Mapping
+  6: Messaging
+  7: Payments
+  8: Reference
+  9: Science
+  10: Search
+  11: Security
+  12: Social
+  13: Sports
+  14: Telephony
+  15: Tools
+  16: Transportation
+  17: Travel
+  18: Video
+  19: eCommerce
+label_to_id:
+  Advertising: 0
+  Email: 1
+  Enterprise: 2
+  Financial: 3
+  Government: 4
+  Mapping: 5
+  Messaging: 6
+  Payments: 7
+  Reference: 8
+  Science: 9
+  Search: 10
+  Security: 11
+  Social: 12
+  Sports: 13
+  Telephony: 14
+  Tools: 15
+  Transportation: 16
+  Travel: 17
+  Video: 18
+  eCommerce: 19
+n_categories: 20
+random_state: 42

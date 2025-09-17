@@ -1,0 +1,125 @@
+categories:
+- Mapping
+- eCommerce
+- Messaging
+- Tools
+- Payments
+- Enterprise
+- Government
+- Financial
+- Social
+- Science
+- Telephony
+- Transportation
+- Sports
+- Security
+- Email
+- Search
+- Travel
+- Reference
+- Advertising
+- Video
+- Data
+- Bitcoin
+- Games
+- Project Management
+- Education
+- Database
+- Cloud
+- Music
+- Photos
+- Other
+- Stocks
+- Application Development
+- Internet of Things
+- Banking
+- Backend
+- Medical
+- Shipping
+- Weather
+- Events
+- Analytics
+id_to_label:
+  0: Advertising
+  1: Analytics
+  2: Application Development
+  3: Backend
+  4: Banking
+  5: Bitcoin
+  6: Cloud
+  7: Data
+  8: Database
+  9: Education
+  10: Email
+  11: Enterprise
+  12: Events
+  13: Financial
+  14: Games
+  15: Government
+  16: Internet of Things
+  17: Mapping
+  18: Medical
+  19: Messaging
+  20: Music
+  21: Other
+  22: Payments
+  23: Photos
+  24: Project Management
+  25: Reference
+  26: Science
+  27: Search
+  28: Security
+  29: Shipping
+  30: Social
+  31: Sports
+  32: Stocks
+  33: Telephony
+  34: Tools
+  35: Transportation
+  36: Travel
+  37: Video
+  38: Weather
+  39: eCommerce
+label_to_id:
+  Advertising: 0
+  Analytics: 1
+  Application Development: 2
+  Backend: 3
+  Banking: 4
+  Bitcoin: 5
+  Cloud: 6
+  Data: 7
+  Database: 8
+  Education: 9
+  Email: 10
+  Enterprise: 11
+  Events: 12
+  Financial: 13
+  Games: 14
+  Government: 15
+  Internet of Things: 16
+  Mapping: 17
+  Medical: 18
+  Messaging: 19
+  Music: 20
+  Other: 21
+  Payments: 22
+  Photos: 23
+  Project Management: 24
+  Reference: 25
+  Science: 26
+  Search: 27
+  Security: 28
+  Shipping: 29
+  Social: 30
+  Sports: 31
+  Stocks: 32
+  Telephony: 33
+  Tools: 34
+  Transportation: 35
+  Travel: 36
+  Video: 37
+  Weather: 38
+  eCommerce: 39
+n_categories: 40
+random_state: 42
