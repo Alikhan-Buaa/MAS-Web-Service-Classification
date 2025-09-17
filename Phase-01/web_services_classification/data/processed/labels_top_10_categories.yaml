@@ -1,0 +1,35 @@
+categories:
+- Mapping
+- eCommerce
+- Messaging
+- Tools
+- Payments
+- Enterprise
+- Government
+- Financial
+- Social
+- Science
+id_to_label:
+  0: Enterprise
+  1: Financial
+  2: Government
+  3: Mapping
+  4: Messaging
+  5: Payments
+  6: Science
+  7: Social
+  8: Tools
+  9: eCommerce
+label_to_id:
+  Enterprise: 0
+  Financial: 1
+  Government: 2
+  Mapping: 3
+  Messaging: 4
+  Payments: 5
+  Science: 6
+  Social: 7
+  Tools: 8
+  eCommerce: 9
+n_categories: 10
+random_state: 42
