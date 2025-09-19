@@ -236,7 +236,7 @@ BERT_CONFIG = {
     # Default model configuration
     "model_name": "roberta-base",  # Default to base model
     "max_length": 128,
-    "num_train_epochs": 5,
+    "num_train_epochs": 10,  # Changed from 5 to 10
     
     # Training configuration  
     "per_device_train_batch_size": 8,
