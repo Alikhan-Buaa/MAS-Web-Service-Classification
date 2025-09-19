@@ -461,7 +461,13 @@ class RoBERTaModelTrainer:
             logger.info(f"Model saved to {model_path}")
             
             # Create training history plot
-            model_display_name = f"RoBERTa-{model_name.split('-')[-1].title()}"
+            if model_name == "roberta-base":
+                model_display_name = "RoBERTa-Base"
+            elif model_name == "roberta-large":
+                model_display_name = "RoBERTa-Large"
+            else:
+                model_display_name = f"RoBERTa-{model_name.split('-')[-1].title()}"
+            
             history_plot_path = self.plot_training_history(trainer, model_display_name, n_categories)
             
             # Evaluate model
@@ -474,10 +480,10 @@ class RoBERTaModelTrainer:
             eval_results['learning_rate'] = model_config['learning_rate']
             
             # Print metrics using common evaluator
-            self.evaluator.print_model_metrics(eval_results, model_display_name, n_categories, "raw_text", training_time, "RoBERTa")
+            self.evaluator.print_model_metrics(eval_results, model_display_name, n_categories, "raw_text", training_time, "BERT")
             
-            # Save performance data using common evaluator
-            self.evaluator.save_model_performance_data(eval_results, model_display_name, n_categories, "raw_text", "roberta")
+            # Save performance data using common evaluator  
+            self.evaluator.save_model_performance_data(eval_results, model_display_name, n_categories, "raw_text", "bert")
             
             return eval_results
             
@@ -609,3 +615,68 @@ class RoBERTaModelTrainer:
         charts_dir = RESULTS_CONFIG["bert_comparisons_path"] / "charts"
         
         self.evaluator.plot_results_comparison(results_file_path, charts_dir, "roberta")
+
+
+def main():
+    """Main function to run comprehensive RoBERTa model training and analysis"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="RoBERTa Model Training for Web Service Classification")
+    parser.add_argument("--model", type=str, default="both", 
+                       choices=["roberta_base", "roberta_large", "both"],
+                       help="RoBERTa model to train (default: both)")
+    parser.add_argument("--categories", nargs="+", type=int, default=CATEGORY_SIZES,
+                       help="Category sizes to train")
+    
+    args = parser.parse_args()
+    
+    trainer = RoBERTaModelTrainer()
+    
+    if args.model == "both":
+        # Train both RoBERTa models from config
+        results = trainer.train_roberta_models(args.categories)
+    else:
+        # Train single model
+        model_name = BERT_CONFIG['available_models'][args.model]
+        logger.info(f"Training single model: {model_name}")
+        
+        results = {}
+        for n_categories in args.categories:
+            results[n_categories] = trainer.train_model_on_category(n_categories, model_name)
+    
+    # Save final results
+    out_file = SAVED_MODELS_CONFIG["bert_models_path"] / "roberta_final_results.json"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w") as f:
+        json_safe_results = trainer.make_json_serializable(results)
+        json.dump(json_safe_results, f, indent=2)
+    logger.info(f"Results saved to {out_file}")
+
+
+# Convenience functions for easy use
+def train_roberta_base():
+    """Train RoBERTa-base model only"""
+    trainer = RoBERTaModelTrainer()
+    model_name = BERT_CONFIG['available_models']['roberta_base']
+    results = {}
+    for n_categories in CATEGORY_SIZES:
+        results[n_categories] = trainer.train_model_on_category(n_categories, model_name)
+    return results
+
+def train_roberta_large():
+    """Train RoBERTa-large model only"""
+    trainer = RoBERTaModelTrainer()
+    model_name = BERT_CONFIG['available_models']['roberta_large']
+    results = {}
+    for n_categories in CATEGORY_SIZES:
+        results[n_categories] = trainer.train_model_on_category(n_categories, model_name)
+    return results
+
+def compare_roberta_models():
+    """Compare RoBERTa-base vs RoBERTa-large"""
+    trainer = RoBERTaModelTrainer()
+    return trainer.train_roberta_models()
+
+
+if __name__ == "__main__":
+    main()
