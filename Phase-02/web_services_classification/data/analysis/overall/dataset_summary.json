@@ -1,0 +1,20 @@
+{
+    "num_samples": 12519,
+    "num_categories": 50,
+    "columns": [
+        "Service Description",
+        "Service Classification",
+        "text_length",
+        "word_count"
+    ],
+    "avg_text_length": 453.6621135873472,
+    "avg_word_count": 70.66754533109673,
+    "missing_values": {
+        "Service Description": 0,
+        "Service Classification": 0,
+        "text_length": 0,
+        "word_count": 0
+    },
+    "duplicates": 0,
+    "memory_usage_mb": 7.07
+}
