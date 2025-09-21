@@ -37,6 +37,12 @@ tokenizers==0.22.0
 huggingface-hub==0.34.4
 #textblob==0.19.0
 
+# DeepSeek and PEFT Dependencies
+peft>=0.15.0
+bitsandbytes>=0.46.0
+accelerate>=1.7.0
+datasets>=3.6.0
+
 # XGBoost
 xgboost==1.7.6
 
