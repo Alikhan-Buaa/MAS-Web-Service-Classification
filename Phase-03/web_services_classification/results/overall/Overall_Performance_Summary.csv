@@ -1,0 +1,5 @@
+Categories,Model_Type,Model,Feature,Accuracy,Precision,Recall,F1-Score,Top-1,Top-3,Top-5,Training_Time,Inference_Time
+50,ML,RoBERTa-Base-raw_text,raw_text,0.8231,0.8262,0.8291,0.8255,0.8231,0.916,0.9338,715.3703,2.5047
+50,ML,RoBERTa-Large-raw_text,raw_text,0.8158,0.8244,0.8218,0.8191,0.8158,0.9063,0.9321,2818.5426,9.1821
+50,DL,BiLSTM-tfidf,tfidf,0.7625,0.7775,0.7729,0.7713,0.7625,0.8805,0.9063,91.9225,0.2666
+50,DL,BiLSTM-sbert,sbert,0.7617,0.7711,0.7695,0.766,0.7617,0.8982,0.9394,27.6103,0.1606
