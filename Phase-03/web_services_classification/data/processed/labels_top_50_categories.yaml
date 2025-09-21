@@ -1,53 +1,53 @@
 categories:
 - Mapping
-- eCommerce
-- Messaging
-- Tools
-- Payments
 - Enterprise
-- Government
+- eCommerce
 - Financial
+- Government
 - Social
+- Payments
+- Tools
+- Messaging
 - Science
 - Telephony
 - Video
-- Advertising
 - Search
+- Advertising
+- Reference
 - Travel
 - Transportation
 - Email
-- Reference
 - Sports
-- Photos
+- Project Management
+- Data
+- Games
+- Bitcoin
+- Education
 - Cloud
 - Music
-- Education
-- Project Management
-- Games
+- Photos
 - Database
-- Data
-- Bitcoin
-- Events
-- Analytics
-- Stocks
-- Banking
 - Internet of Things
-- Medical
-- Application Development
 - Shipping
+- Application Development
+- Events
+- Banking
+- Stocks
+- Medical
+- Analytics
 - Other
 - Security
 - Backend
-- Storage
-- Office
-- Media
+- News Services
+- Domains
 - File Sharing
 - Images
 - Real Estate
 - Entertainment
 - Chat
-- News Services
-- Domains
+- Media
+- Storage
+- Office
 - Weather
 id_to_label:
   0: Advertising
