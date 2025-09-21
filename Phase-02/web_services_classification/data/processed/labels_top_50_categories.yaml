@@ -1,6 +1,5 @@
 categories:
 - Mapping
-- Social
 - eCommerce
 - Messaging
 - Tools
@@ -8,47 +7,48 @@ categories:
 - Enterprise
 - Government
 - Financial
+- Social
 - Science
 - Telephony
 - Video
-- Search
 - Advertising
-- Reference
+- Search
 - Travel
 - Transportation
 - Email
-- Security
+- Reference
 - Sports
 - Photos
-- Music
 - Cloud
-- Other
-- Database
+- Music
 - Education
 - Project Management
 - Games
-- Bitcoin
+- Database
 - Data
-- Analytics
+- Bitcoin
 - Events
-- Weather
-- Shipping
-- Medical
+- Analytics
 - Stocks
 - Banking
-- Backend
 - Internet of Things
+- Medical
 - Application Development
+- Shipping
+- Other
+- Security
+- Backend
 - Storage
-- Media
 - Office
+- Media
+- File Sharing
+- Images
+- Real Estate
+- Entertainment
 - Chat
 - News Services
-- Entertainment
-- Real Estate
-- Images
-- File Sharing
 - Domains
+- Weather
 id_to_label:
   0: Advertising
   1: Analytics
