@@ -6,7 +6,8 @@ Enhanced to ensure consistency across all model types
 from pathlib import Path
 
 # Base paths
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).parent.parent
+
 DATA_PATH = PROJECT_ROOT / "data"
 MODELS_PATH = PROJECT_ROOT / "models"
 RESULTS_PATH = PROJECT_ROOT / "results"
@@ -37,11 +38,11 @@ LOGGING_CONFIG = {
 
 # Data configuration
 DATA_CONFIG = {
-    'raw_data_path': DATA_PATH / "raw" / "webservices_dataset.csv",  # Specific file path
+    'raw_data_path': DATA_PATH / "raw" / "web_services_dataset.csv",  # Specific file path
     'processed_data_path': DATA_PATH / "processed",
     'analysis_path': DATA_PATH / "analysis",
     'text_column': 'Service Description',  # Column name for text data
-    'target_column': 'Category',  # Column name for categories
+    'target_column': 'Service Classification',  # Column name for categories
 }
 
 # Analysis paths (used by data_analysis.py)
