@@ -1,8 +1,6 @@
 """
-DeepSeek Models for Web Service Classification
-Uses common evaluation functionality from evaluate.py
-Following the structure of bert_models.py
-Only supports DeepSeek-7B-base as specified in config
+Enhanced DeepSeek Models for Web Service Classification
+Enhanced with standardized naming and proper result handling
 """
 
 import pandas as pd
@@ -17,7 +15,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 from datasets import Dataset
-from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 from transformers import (
     AutoTokenizer, AutoModelForSequenceClassification, 
@@ -30,12 +27,13 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer, WordNetLemmatizer
 
-# Import configuration
+# Import configuration and utilities
 from src.config import (
     CATEGORY_SIZES, SAVED_MODELS_CONFIG, DEEPSEEK_CONFIG, 
     PREPROCESSING_CONFIG, RANDOM_SEED, RESULTS_CONFIG
 )
-from src.evaluation.evaluate import ModelEvaluator  # Import common evaluator
+from src.evaluation.evaluate import ModelEvaluator
+from src.utils.utils import FileNamingStandard
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -50,13 +48,11 @@ if torch.cuda.is_available():
 
 
 class DeepSeekModelTrainer:
-    """Main class for training DeepSeek models"""
+    """Enhanced DeepSeek model trainer with standardized naming"""
     
     @staticmethod
     def make_json_serializable(obj):
         """Convert numpy types and Path objects to native Python types for JSON serialization"""
-        from pathlib import Path
-        
         if isinstance(obj, dict):
             return {key: DeepSeekModelTrainer.make_json_serializable(value) for key, value in obj.items()}
         elif isinstance(obj, list):
@@ -79,7 +75,7 @@ class DeepSeekModelTrainer:
         self.model = None
         self.label_encoder = None
         self.config = DEEPSEEK_CONFIG
-        self.evaluator = ModelEvaluator()  # Use common evaluator
+        self.evaluator = ModelEvaluator()
         
         # Configure GPU
         self._configure_gpu()
@@ -308,7 +304,7 @@ class DeepSeekModelTrainer:
             raise
     
     def plot_training_history(self, trainer, model_name, n_categories):
-        """Create training history plots from trainer logs"""
+        """Create training history plots with standardized naming"""
         try:
             # Get training history from trainer
             log_history = trainer.state.log_history
@@ -357,10 +353,13 @@ class DeepSeekModelTrainer:
             
             plt.tight_layout()
             
-            # Save plot
+            # Save plot using standardized naming
             plot_dir = RESULTS_CONFIG['deepseek_category_paths'][n_categories]
             plot_dir.mkdir(parents=True, exist_ok=True)
-            plot_file = plot_dir / f'{model_name}_top_{n_categories}_categories_history.png'
+            
+            filename = FileNamingStandard.generate_training_history_filename(model_name, n_categories)
+            plot_file = plot_dir / filename
+            
             plt.savefig(plot_file, dpi=300, bbox_inches='tight')
             plt.close()
             
@@ -412,9 +411,13 @@ class DeepSeekModelTrainer:
             # Confusion matrix
             cm = confusion_matrix(y_true, y_pred)
             
-            # Create visualizations using common evaluator
-            cm_plot_path = self.evaluator.generate_confusion_heatmap(cm, class_labels, model_name, n_categories, "raw_text", "deepseek")
-            report_path = self.evaluator.generate_classification_report_csv(y_true, y_pred, class_labels, model_name, n_categories, "raw_text", "deepseek")
+            # Create visualizations using common evaluator with standardized naming
+            cm_plot_path = self.evaluator.generate_confusion_heatmap(
+                cm, class_labels, model_name, n_categories, "raw_text", "deepseek"
+            )
+            report_path = self.evaluator.generate_classification_report_csv(
+                y_true, y_pred, class_labels, model_name, n_categories, "raw_text", "deepseek"
+            )
             
             # Compile results
             results = {
@@ -456,6 +459,7 @@ class DeepSeekModelTrainer:
                 model_name = self.config['model_name']
             
             # Validate model name against config
+            # Validate model name against config
             if model_name not in self.config['available_models'].values():
                 raise ValueError(f"Model {model_name} not in available models: {list(self.config['available_models'].values())}")
             
@@ -483,9 +487,10 @@ class DeepSeekModelTrainer:
             model_dir = SAVED_MODELS_CONFIG['deepseek_models_path'] / f'top_{n_categories}_categories'
             model_dir.mkdir(parents=True, exist_ok=True)
             
-            # Create model-specific output directory
+            # Create model-specific output directory with standardized naming
             model_variant = model_name.replace('-', '_').replace('/', '_')
-            output_dir = model_dir / f'{model_variant}_top_{n_categories}_categories'
+            clean_model_name = FileNamingStandard.standardize_model_name(model_name)
+            output_dir = model_dir / f'{clean_model_name}_top_{n_categories}_categories'
             
             training_args = TrainingArguments(
                 output_dir=str(output_dir),
@@ -531,23 +536,27 @@ class DeepSeekModelTrainer:
             
             logger.info(f"Training completed in {training_time:.2f} seconds")
             
-            # Save model
-            model_path = model_dir / f'{model_variant}_model_top_{n_categories}_categories'
+            # Save model with standardized naming
+            model_filename = FileNamingStandard.generate_model_filename(
+                model_name, 'raw_text', n_categories, 'model'
+            )
+            model_path = model_dir / model_filename
             trainer.save_model(str(model_path))
             
             # Save tokenizer and label encoder
             self.tokenizer.save_pretrained(str(model_path))
-            with open(model_path / "label_encoder.pkl", "wb") as f:
-                pickle.dump(self.label_encoder, f)
+            if self.label_encoder:
+                with open(model_path / "label_encoder.pkl", "wb") as f:
+                    pickle.dump(self.label_encoder, f)
             
             logger.info(f"Model saved to {model_path}")
             
             # Create training history plot
-            model_display_name = "DeepSeek-7B-Base"
-            history_plot_path = self.plot_training_history(trainer, model_display_name, n_categories)
+            display_name = FileNamingStandard.standardize_model_name(model_name)
+            history_plot_path = self.plot_training_history(trainer, display_name, n_categories)
             
             # Evaluate model
-            eval_results = self.evaluate_deepseek_model(trainer, test_dataset, model_display_name, n_categories, class_labels)
+            eval_results = self.evaluate_deepseek_model(trainer, test_dataset, display_name, n_categories, class_labels)
             eval_results['training_time'] = float(training_time)
             eval_results['model_path'] = str(model_path)
             eval_results['model_variant'] = model_name
@@ -556,16 +565,55 @@ class DeepSeekModelTrainer:
             eval_results['learning_rate'] = model_config['learning_rate']
             
             # Print metrics using common evaluator
-            self.evaluator.print_model_metrics(eval_results, model_display_name, n_categories, "raw_text", training_time, "DeepSeek")
+            self.evaluator.print_model_metrics(eval_results, display_name, n_categories, "raw_text", training_time, "DeepSeek")
             
             # Save performance data using common evaluator  
-            self.evaluator.save_model_performance_data(eval_results, model_display_name, n_categories, "raw_text", "deepseek")
+            self.evaluator.save_model_performance_data(eval_results, display_name, n_categories, "raw_text", "deepseek")
             
             return eval_results
             
         except Exception as e:
             logger.error(f"Error training {model_name} for {n_categories} categories: {str(e)}")
             raise
+    
+    def save_results_for_overall_analysis(self, all_results):
+        """Save results in the format expected by OverallPerformanceAnalyzer"""
+        try:
+            comparisons_path = RESULTS_CONFIG['deepseek_comparisons_path']
+            comparisons_path.mkdir(parents=True, exist_ok=True)
+            
+            # Transform results into the format expected by OverallPerformanceAnalyzer
+            formatted_results = {}
+            
+            for model_key, model_results in all_results.items():
+                for n_categories, result in model_results.items():
+                    if n_categories not in formatted_results:
+                        formatted_results[n_categories] = {}
+                    
+                    # Create a key that matches the expected format
+                    model_name = result.get('model_name', f'deepseek_model')
+                    feature_type = result.get('feature_type', 'raw_text')
+                    
+                    # Use consistent naming pattern
+                    clean_model_name = FileNamingStandard.standardize_model_name(model_name)
+                    result_key = f"{clean_model_name}_{feature_type}"
+                    formatted_results[n_categories][result_key] = result
+            
+            # Save as pickle file
+            pickle_file = comparisons_path / "deepseek_final_results.pkl"
+            with open(pickle_file, 'wb') as f:
+                pickle.dump(formatted_results, f)
+            
+            logger.info(f"DeepSeek results saved for overall analysis: {pickle_file}")
+            
+            # Also save JSON for debugging
+            json_file = comparisons_path / "deepseek_final_results.json"
+            with open(json_file, 'w') as f:
+                json_safe_results = self.make_json_serializable(formatted_results)
+                json.dump(json_safe_results, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Error saving DeepSeek results for overall analysis: {e}")
     
     def train_deepseek_models(self, categories=None):
         """Train DeepSeek models"""
@@ -602,7 +650,7 @@ class DeepSeekModelTrainer:
                     category_dir = SAVED_MODELS_CONFIG['deepseek_models_path'] / f'top_{n_categories}_categories'
                     category_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # Save as JSON
+                    # Save as JSON with standardized naming
                     model_variant = model_name.replace('-', '_').replace('/', '_')
                     results_json = category_dir / f'deepseek_{model_variant}_results.json'
                     with open(results_json, 'w') as f:
@@ -625,6 +673,9 @@ class DeepSeekModelTrainer:
         print(f"\n{'='*80}")
         print(f"DEEPSEEK MODEL TRAINING PIPELINE COMPLETED")
         print(f"{'='*80}")
+        
+        # Save results for overall analysis
+        self.save_results_for_overall_analysis(all_results)
         
         return all_results
     
@@ -662,22 +713,6 @@ def main():
         json_safe_results = trainer.make_json_serializable(results)
         json.dump(json_safe_results, f, indent=2)
     logger.info(f"Results saved to {out_file}")
-
-
-# Convenience functions for easy use
-def train_deepseek_7b():
-    """Train DeepSeek-7B model only"""
-    trainer = DeepSeekModelTrainer()
-    model_name = DEEPSEEK_CONFIG['available_models']['deepseek_7b_base']
-    results = {}
-    for n_categories in CATEGORY_SIZES:
-        results[n_categories] = trainer.train_model_on_category(n_categories, model_name)
-    return results
-
-def train_deepseek_all():
-    """Train all DeepSeek models from config"""
-    trainer = DeepSeekModelTrainer()
-    return trainer.train_deepseek_models()
 
 
 if __name__ == "__main__":

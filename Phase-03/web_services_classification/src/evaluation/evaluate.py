@@ -1,294 +1,302 @@
 """
-Common Evaluation Module for ML and DL Models
-Contains shared evaluation functionality, visualization, and result analysis
+Enhanced ModelEvaluator with standardized naming and proper model type handling
 """
 
 import pandas as pd
 import numpy as np
-import logging
-import json
-import yaml
-import time
-import pickle
-from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import (
-    accuracy_score,
-    precision_recall_fscore_support,
-    confusion_matrix,
-    classification_report
-)
-from math import pi
+import pickle
+import json
+import logging
+from pathlib import Path
+from sklearn.metrics import classification_report
 
-# Import configuration
-from src.config import (
-    CATEGORY_SIZES, RESULTS_CONFIG, SAVED_MODELS_CONFIG, PREPROCESSING_CONFIG
-)
+# Import standardized naming
+from src.utils.utils import FileNamingStandard
+from src.config import RESULTS_CONFIG, CATEGORY_SIZES
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 class ModelEvaluator:
-    """Common evaluation class for both ML and DL models"""
+    """Enhanced evaluator with standardized naming across all model types"""
     
     def __init__(self):
         self.final_results = {}
-    
-    def calculate_top_k_accuracy(self, y_true, y_proba, k=5):
-        """Calculate Top-K accuracy for both ML and DL models"""
+        
+    def calculate_top_k_accuracy(self, y_true, y_proba, k=1):
+        """Calculate top-k accuracy"""
         try:
-            if k == 1:
-                if hasattr(y_true, 'ndim') and y_true.ndim > 1:
-                    # For DL models with one-hot encoded labels
-                    y_pred = np.argmax(y_proba, axis=1)
+            # Handle different input formats
+            if hasattr(y_true, 'shape') and len(y_true.shape) > 1:
+                # One-hot encoded
+                if y_true.shape[1] > 1:
                     y_true_labels = np.argmax(y_true, axis=1)
-                    return accuracy_score(y_true_labels, y_pred)
                 else:
-                    # For ML models with label indices
-                    y_pred = np.argmax(y_proba, axis=1)
-                    return accuracy_score(y_true, y_pred)
-            
-            # Handle one-hot encoded labels for DL
-            if hasattr(y_true, 'ndim') and y_true.ndim > 1:
-                y_true_labels = np.argmax(y_true, axis=1)
+                    y_true_labels = y_true.flatten()
             else:
+                # Already label indices
                 y_true_labels = y_true
             
-            top_k_preds = np.argsort(y_proba, axis=1)[:, -k:]
-            correct = sum(1 for i, true_label in enumerate(y_true_labels) 
-                         if true_label in top_k_preds[i])
-            
-            return correct / len(y_true_labels)
-            
+            # Get top-k predictions
+            if k == 1:
+                top_k_preds = np.argmax(y_proba, axis=1)
+                return np.mean(top_k_preds == y_true_labels)
+            else:
+                top_k_preds = np.argsort(y_proba, axis=1)[:, -k:]
+                return np.mean([label in pred for label, pred in zip(y_true_labels, top_k_preds)])
+                
         except Exception as e:
-            logger.error(f"Error calculating top-k accuracy: {str(e)}")
+            logger.error(f"Error calculating top-{k} accuracy: {e}")
             return 0.0
     
-    def generate_confusion_heatmap(self, cm, class_labels, model_name, n_categories, feature_type, model_type="ml"):
-        """Generate confusion matrix heatmap with dynamic sizing"""
-        n_classes = len(class_labels)
-        
-        # Dynamic figure size based on number of classes
-        figsize = (12, 10)
-        if n_classes >= 40:
-            figsize = (18, 18)
-        elif n_classes > 20:
-            figsize = (14, 12)
-        
-        # Adjust annotation font size based on number of classes
-        annot_fontsize = 8 if n_classes <= 20 else 6 if n_classes <= 40 else 4
-        
-        plt.figure(figsize=figsize)
-        
-        # Shorten labels if too long
-        display_labels = [lbl[:12] + "..." if len(lbl) > 15 else lbl for lbl in class_labels]
-        
-        # Create heatmap
-        sns.heatmap(
-            cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=display_labels, yticklabels=display_labels,
-            annot_kws={"size": annot_fontsize}
-        )
-        
-        plt.title(f'Confusion Matrix: {model_name} ({feature_type.upper()}, Top-{n_categories})')
-        plt.xlabel('Predicted')
-        plt.ylabel('Actual')
-        plt.xticks(rotation=45, ha='right')
-        plt.yticks(rotation=0)
-        plt.tight_layout()
-        
-        # Save to appropriate directory based on model type
-        if model_type.lower() == "dl":
-            cm_dir = RESULTS_CONFIG["dl_category_paths"][n_categories]
-        else:
-            cm_dir = RESULTS_CONFIG["ml_category_paths"][n_categories]
-        
-        cm_dir.mkdir(parents=True, exist_ok=True)
-        save_path = cm_dir / f"{model_name}_{feature_type}_top_{n_categories}_categories_confusion_matrix.png"
-        
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        plt.close()
-        
-        return save_path
+    def load_class_labels(self, n_categories):
+        """Load class labels for a given category size"""
+        try:
+            from src.config import PREPROCESSING_CONFIG
+            splits_dir = Path(PREPROCESSING_CONFIG["splits"].format(n=n_categories))
+            
+            # Try to load from train.csv
+            train_df = pd.read_csv(splits_dir / 'train.csv')
+            
+            if 'label' in train_df.columns and 'encoded_label' in train_df.columns:
+                # Create mapping from encoded labels to original labels
+                label_mapping = train_df.groupby('encoded_label')['label'].first().sort_index()
+                return label_mapping.tolist()
+            else:
+                # Fallback: create generic labels
+                return [f"Category_{i}" for i in range(n_categories)]
+                
+        except Exception as e:
+            logger.error(f"Error loading class labels for {n_categories} categories: {e}")
+            return [f"Category_{i}" for i in range(n_categories)]
     
-    def generate_classification_report_csv(self, y_true, y_pred, class_labels, model_name, n_categories, feature_type, model_type="ml"):
-        """Generate classification report with accuracy per class"""
-        report_dict = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
-        df = pd.DataFrame(report_dict).transpose()
-
-        cm = confusion_matrix(y_true, y_pred)
-        per_class_acc = np.diag(cm) / cm.sum(axis=1)
-        df["accuracy"] = np.concatenate([per_class_acc, [None] * (len(df) - len(per_class_acc))])
-        
-        # This is the key line that adds the category_name column
-        df["category_name"] = df.index.map(
-            lambda x: class_labels[int(x)] if x.isdigit() and int(x) < len(class_labels) else x
-        )
-
-        df.reset_index(inplace=True)
-        df.rename(columns={"index": "Class"}, inplace=True)
-
-        # Save to appropriate directory based on model type
-        if model_type.lower() == "dl":
-            reports_dir = RESULTS_CONFIG["dl_category_paths"][n_categories]
-        else:
-            reports_dir = RESULTS_CONFIG["ml_category_paths"][n_categories]
-        
-        reports_dir.mkdir(parents=True, exist_ok=True)
-        out_path = reports_dir / f"{model_name}_{feature_type}_top_{n_categories}_categories_classification_report.csv"
-        df.to_csv(out_path, index=False)
-        return out_path
-    
-    def print_model_metrics(self, results, model_name, n_categories, feature_type, training_time, model_type="ML"):
-        """Print model metrics to console in a formatted way"""
-        print(f"\n{'='*60}")
-        print(f"{model_type.upper()} MODEL PERFORMANCE SUMMARY")
-        print(f"{'='*60}")
-        print(f"Model: {model_name}")
-        print(f"Feature Type: {feature_type.upper()}")
-        print(f"Categories: Top {n_categories}")
-        print(f"Training Time: {training_time:.2f} seconds")
-        print(f"Inference Time: {results['inference_time']:.4f} seconds")
-        print(f"{'-'*60}")
-        print(f"ACCURACY METRICS:")
-        print(f"  Accuracy:      {results['accuracy']:.4f} ({results['accuracy']*100:.2f}%)")
-        print(f"  Top-1 Acc:     {results['top1_accuracy']:.4f} ({results['top1_accuracy']*100:.2f}%)")
-        print(f"  Top-3 Acc:     {results['top3_accuracy']:.4f} ({results['top3_accuracy']*100:.2f}%)")
-        print(f"  Top-5 Acc:     {results['top5_accuracy']:.4f} ({results['top5_accuracy']*100:.2f}%)")
-        print(f"{'-'*60}")
-        print(f"CLASSIFICATION METRICS (Macro Average):")
-        print(f"  Precision:     {results['macro_precision']:.4f} ({results['macro_precision']*100:.2f}%)")
-        print(f"  Recall:        {results['macro_recall']:.4f} ({results['macro_recall']*100:.2f}%)")
-        print(f"  F1-Score:      {results['macro_f1']:.4f} ({results['macro_f1']*100:.2f}%)")
-        print(f"{'='*60}\n")
-    
-    def save_model_performance_data(self, results, model_name, n_categories, feature_type, model_type="ml"):
-        """Save model performance data in the format needed for plotting"""
-        model_entry = {
-            "model": f"{model_name}-{feature_type}",
-            "accuracy": results["accuracy"],
-            "precision": results["macro_precision"],
-            "recall": results["macro_recall"],
-            "f1_score": results["macro_f1"],
-            "feature_type": feature_type,
-            "n_categories": n_categories,
-            "top1_accuracy": results["top1_accuracy"],
-            "top3_accuracy": results["top3_accuracy"],
-            "top5_accuracy": results["top5_accuracy"],
-            "training_time": results.get("training_time", 0),
-            "inference_time": results.get("inference_time", 0)
+    def _get_results_path(self, model_type, n_categories):
+        """Get the correct results path based on model type"""
+        model_type_mapping = {
+            'ml': 'ml',
+            'dl': 'dl', 
+            'bert': 'bert',
+            'roberta': 'bert',  # Map roberta to bert directory
+            'deepseek': 'deepseek'
         }
         
-        # Store in final_results structure
-        if n_categories not in self.final_results:
-            self.final_results[n_categories] = []
+        # Get the correct model type for directory structure
+        dir_model_type = model_type_mapping.get(model_type, model_type)
         
-        self.final_results[n_categories].append(model_entry)
-        
-        # Save after each model
-        self.save_final_results(model_type)
-        
-        return model_entry
-    
-    def save_final_results(self, model_type="ml"):
-        """Save final results to pickle file for plotting"""
-        if model_type.lower() == "dl":
-            models_path = SAVED_MODELS_CONFIG["dl_models_path"]
-            comparisons_path = RESULTS_CONFIG["dl_comparisons_path"]
-            filename = "dl_final_results.pkl"
+        # Determine the correct results path
+        if dir_model_type == 'bert':
+            return RESULTS_CONFIG['bert_category_paths'][n_categories]
+        elif dir_model_type == 'deepseek':
+            return RESULTS_CONFIG['deepseek_category_paths'][n_categories]
+        elif dir_model_type == 'ml':
+            return RESULTS_CONFIG['ml_category_paths'][n_categories]
+        elif dir_model_type == 'dl':
+            return RESULTS_CONFIG['dl_category_paths'][n_categories]
         else:
-            models_path = SAVED_MODELS_CONFIG["ml_models_path"]
-            comparisons_path = RESULTS_CONFIG["ml_comparisons_path"]
-            filename = "ml_final_results.pkl"
-        
-        # Save to models directory
-        models_path.mkdir(parents=True, exist_ok=True)
-        results_file = models_path / filename
-        with open(results_file, "wb") as f:
-            pickle.dump(self.final_results, f)
-        logger.info(f"{model_type.upper()} final results saved to {results_file}")
-
-        # Save to comparisons directory
-        comparisons_path.mkdir(parents=True, exist_ok=True)
-        results_file = comparisons_path / filename
-        with open(results_file, "wb") as f:
-            pickle.dump(self.final_results, f)
-        logger.info(f"{model_type.upper()} final results saved to {results_file}")
+            # Fallback - create a generic path
+            fallback_path = Path(f"results/{dir_model_type}/top_{n_categories}_categories")
+            fallback_path.mkdir(parents=True, exist_ok=True)
+            return fallback_path
     
-    def load_class_labels(self, n_categories):
-        """Load class labels from YAML file"""
-        labels_file = Path(PREPROCESSING_CONFIG["labels"].format(n=n_categories))
+    def generate_confusion_heatmap(self, cm, class_labels, model_name, n_categories, feature_type, model_type):
+        """Generate confusion matrix heatmap with standardized naming"""
         try:
-            with open(labels_file, "r") as f:
-                class_labels = yaml.safe_load(f).get("categories", [])
-        except FileNotFoundError:
-            class_labels = [f'Cat_{i}' for i in range(n_categories)]
-        return class_labels
+            # Get results path
+            results_path = self._get_results_path(model_type, n_categories)
+            results_path.mkdir(parents=True, exist_ok=True)
+            
+            # Create confusion matrix plot
+            plt.figure(figsize=(12, 10))
+            sns.heatmap(
+                cm, 
+                annot=True, 
+                fmt='d', 
+                cmap='Blues',
+                xticklabels=class_labels,
+                yticklabels=class_labels
+            )
+            plt.title(f'{model_name} - Confusion Matrix\n{n_categories} Categories ({feature_type.upper()})')
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.xticks(rotation=45, ha='right')
+            plt.yticks(rotation=0)
+            plt.tight_layout()
+            
+            # Save plot using standardized filename
+            filename = FileNamingStandard.generate_confusion_matrix_filename(
+                model_name, feature_type, n_categories
+            )
+            plot_file = results_path / filename
+            plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            logger.info(f"Confusion matrix saved: {plot_file}")
+            return str(plot_file)
+            
+        except Exception as e:
+            logger.error(f"Error generating confusion matrix for {model_name}: {e}")
+            return None
     
-    def plot_results_comparison(self, results_file_path, charts_dir, model_type="ml"):
-        """
-        Generate comprehensive plots and analysis
-        
-        Args:
-            results_file_path (Path): Path to the final_results.pkl file
-            charts_dir (Path): Directory to save charts
-            model_type (str): "ml" or "dl"
-        """
-        
-        if not results_file_path.exists():
-            print(f"No {model_type.upper()} results file found at: {results_file_path}")
-            return
-        
-        # Create charts directory
-        charts_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Load results
-        with open(results_file_path, "rb") as f:
-            final_results = pickle.load(f)
-        
-        print(f"Generating plots and analysis for {model_type.upper()} results...")
-        print(f"Results loaded from: {results_file_path}")
-        print(f"Charts will be saved to: {charts_dir}")
-        
-        model_metrics = {}
+    def generate_classification_report_csv(self, y_true, y_pred, class_labels, model_name, n_categories, feature_type, model_type):
+        """Generate classification report CSV with standardized naming"""
+        try:
+            # Get results path
+            results_path = self._get_results_path(model_type, n_categories)
+            results_path.mkdir(parents=True, exist_ok=True)
+            
+            # Generate classification report
+            report = classification_report(
+                y_true, 
+                y_pred, 
+                target_names=class_labels,
+                output_dict=True,
+                zero_division=0
+            )
+            
+            # Convert to DataFrame
+            report_df = pd.DataFrame(report).transpose()
+            
+            # Save using standardized filename
+            filename = FileNamingStandard.generate_classification_report_filename(
+                model_name, feature_type, n_categories
+            )
+            report_file = results_path / filename
+            report_df.to_csv(report_file)
+            
+            logger.info(f"Classification report saved: {report_file}")
+            return str(report_file)
+            
+        except Exception as e:
+            logger.error(f"Error generating classification report for {model_name}: {e}")
+            return None
+    
+    def print_model_metrics(self, results, model_name, n_categories, feature_type, training_time, model_category):
+        """Print standardized model metrics"""
+        print(f"\n{'='*60}")
+        print(f"{model_category} MODEL EVALUATION: {model_name}")
+        print(f"{'='*60}")
+        print(f"Categories: {n_categories} | Feature Type: {feature_type.upper()}")
+        print(f"Training Time: {training_time:.2f}s | Inference Time: {results.get('inference_time', 0):.4f}s")
+        print(f"{'-'*60}")
+        print(f"Top-1 Accuracy: {results.get('top1_accuracy', results.get('accuracy', 0)):.4f}")
+        print(f"Top-3 Accuracy: {results.get('top3_accuracy', 0):.4f}")
+        print(f"Top-5 Accuracy: {results.get('top5_accuracy', 0):.4f}")
+        print(f"Macro F1:      {results.get('macro_f1', 0):.4f}")
+        print(f"Micro F1:      {results.get('micro_f1', 0):.4f}")
+        print(f"{'='*60}")
+    
+    def save_model_performance_data(self, results, model_name, n_categories, feature_type, model_type):
+        """Save model performance data to final results"""
+        try:
+            # Initialize category if not exists
+            if n_categories not in self.final_results:
+                self.final_results[n_categories] = {}
+            
+            # Create standardized key
+            clean_model_name = FileNamingStandard.standardize_model_name(model_name)
+            result_key = f"{clean_model_name}_{feature_type}"
+            
+            # Store results
+            self.final_results[n_categories][result_key] = results
+            
+            # Save to pickle file for overall analysis
+            self._save_final_results_pickle(model_type)
+            
+            logger.info(f"Performance data saved for {model_name} ({feature_type})")
+            
+        except Exception as e:
+            logger.error(f"Error saving performance data: {e}")
+    
+    def _save_final_results_pickle(self, model_type):
+        """Save final results as pickle file for overall analysis"""
+        try:
+            # Determine comparisons path
+            if model_type == 'ml':
+                comparisons_path = RESULTS_CONFIG['ml_comparisons_path']
+            elif model_type == 'dl':
+                comparisons_path = RESULTS_CONFIG['dl_comparisons_path']
+            elif model_type in ['bert', 'roberta']:
+                comparisons_path = RESULTS_CONFIG['bert_comparisons_path']
+            elif model_type == 'deepseek':
+                comparisons_path = RESULTS_CONFIG['deepseek_comparisons_path']
+            else:
+                return  # Skip if unknown type
+            
+            comparisons_path.mkdir(parents=True, exist_ok=True)
+            
+            # Save as pickle
+            pickle_file = comparisons_path / f"{model_type}_final_results.pkl"
+            with open(pickle_file, 'wb') as f:
+                pickle.dump(self.final_results, f)
+                
+            logger.info(f"Final results saved: {pickle_file}")
+            
+        except Exception as e:
+            logger.error(f"Error saving final results pickle: {e}")
+    
+    def plot_results_comparison(self, results_file_path, charts_dir, model_type):
+        """Generate comparison plots with full implementation"""
+        try:
+            if not results_file_path.exists():
+                print(f"No {model_type.upper()} results file found at: {results_file_path}")
+                return
+            
+            # Create charts directory
+            charts_dir = Path(charts_dir)
+            charts_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Load results
+            with open(results_file_path, "rb") as f:
+                final_results = pickle.load(f)
+            
+            print(f"Generating plots and analysis for {model_type.upper()} results...")
+            print(f"Results loaded from: {results_file_path}")
+            print(f"Charts will be saved to: {charts_dir}")
+            
+            model_metrics = {}
 
-        # Parse results and organize by model and feature type
-        for n, results in final_results.items():
-            for entry in results:
-                model = entry['model']
-                feature_type = entry['feature_type']
+            # Parse results and organize by model and feature type
+            for n, results in final_results.items():
+                for entry in results:
+                    if isinstance(entry, dict):
+                        model = entry.get('model', 'Unknown')
+                        feature_type = entry.get('feature_type', 'unknown')
+                        
+                        if model not in model_metrics:
+                            model_metrics[model] = {}
+                        
+                        if feature_type not in model_metrics[model]:
+                            model_metrics[model][feature_type] = {
+                                'n': [], 'accuracy': [], 'precision': [], 'recall': [], 'f1_score': [],
+                                'top1_accuracy': [], 'top3_accuracy': [], 'top5_accuracy': [],
+                                'training_time': [], 'inference_time': []
+                            }
+                        
+                        model_metrics[model][feature_type]['n'].append(entry.get('n_categories', n))
+                        model_metrics[model][feature_type]['accuracy'].append(entry.get('accuracy', 0))
+                        model_metrics[model][feature_type]['precision'].append(entry.get('precision', entry.get('macro_precision', 0)))
+                        model_metrics[model][feature_type]['recall'].append(entry.get('recall', entry.get('macro_recall', 0)))
+                        model_metrics[model][feature_type]['f1_score'].append(entry.get('f1_score', entry.get('macro_f1', 0)))
+                        model_metrics[model][feature_type]['top1_accuracy'].append(entry.get('top1_accuracy', entry.get('accuracy', 0)))
+                        model_metrics[model][feature_type]['top3_accuracy'].append(entry.get('top3_accuracy', 0))
+                        model_metrics[model][feature_type]['top5_accuracy'].append(entry.get('top5_accuracy', 0))
+                        model_metrics[model][feature_type]['training_time'].append(entry.get('training_time', 0))
+                        model_metrics[model][feature_type]['inference_time'].append(entry.get('inference_time', 0))
+            
+            # Generate line plots
+            self._generate_line_plots(model_metrics, charts_dir, model_type)
+            
+            # Generate bar plots for each category
+            self._generate_bar_plots(final_results, charts_dir, model_type)
+            
+            # Generate summary statistics
+            self._generate_summary_statistics(final_results, charts_dir, model_type)
                 
-                if model not in model_metrics:
-                    model_metrics[model] = {}
-                
-                if feature_type not in model_metrics[model]:
-                    model_metrics[model][feature_type] = {
-                        'n': [], 'accuracy': [], 'precision': [], 'recall': [], 'f1_score': [],
-                        'top1_accuracy': [], 'top3_accuracy': [], 'top5_accuracy': [],
-                        'training_time': [], 'inference_time': []
-                    }
-                
-                model_metrics[model][feature_type]['n'].append(entry['n_categories'])
-                model_metrics[model][feature_type]['accuracy'].append(entry['accuracy'])
-                model_metrics[model][feature_type]['precision'].append(entry['precision'])
-                model_metrics[model][feature_type]['recall'].append(entry['recall'])
-                model_metrics[model][feature_type]['f1_score'].append(entry['f1_score'])
-                model_metrics[model][feature_type]['top1_accuracy'].append(entry.get('top1_accuracy', entry['accuracy']))
-                model_metrics[model][feature_type]['top3_accuracy'].append(entry.get('top3_accuracy', 0))
-                model_metrics[model][feature_type]['top5_accuracy'].append(entry.get('top5_accuracy', 0))
-                model_metrics[model][feature_type]['training_time'].append(entry.get('training_time', 0))
-                model_metrics[model][feature_type]['inference_time'].append(entry.get('inference_time', 0))
-        
-        # Generate line plots
-        self._generate_line_plots(model_metrics, charts_dir, model_type)
-        
-        # Generate bar plots for each category
-        self._generate_bar_plots(final_results, charts_dir, model_type)
-        
-        # Generate summary statistics
-        self._generate_summary_statistics(final_results, charts_dir, model_type)
+        except Exception as e:
+            logger.error(f"Error generating {model_type} plots: {e}")
     
     def _generate_line_plots(self, model_metrics, charts_dir, model_type):
         """Generate line plots for performance metrics"""
@@ -363,11 +371,29 @@ class ModelEvaluator:
                 print(f"Skipping n={n} (no {model_type.upper()} results found)")
                 continue
 
-            combined_results = final_results[n]
+            # Handle different result structures
+            combined_results = []
+            if isinstance(final_results[n], list):
+                combined_results = final_results[n]
+            elif isinstance(final_results[n], dict):
+                for key, value in final_results[n].items():
+                    if isinstance(value, dict):
+                        # Add model name if missing
+                        if 'model' not in value:
+                            value['model'] = key
+                        combined_results.append(value)
+            
+            if not combined_results:
+                continue
+                
             df_combined = pd.DataFrame(combined_results)
 
             metrics_to_plot = ['accuracy', 'precision', 'recall', 'f1_score', 'top1_accuracy', 'top3_accuracy', 'top5_accuracy']
             available_metrics = [col for col in metrics_to_plot if col in df_combined.columns]
+            
+            # Handle missing model column
+            if 'model' not in df_combined.columns:
+                df_combined['model'] = [f'Model_{i}' for i in range(len(df_combined))]
             
             df_plot_combined = df_combined[['model'] + available_metrics]
             df_plot_combined.set_index('model', inplace=True)
@@ -377,13 +403,15 @@ class ModelEvaluator:
             
             # Standard metrics
             standard_metrics = ['accuracy', 'precision', 'recall', 'f1_score']
-            df_plot_combined[standard_metrics].plot(kind='bar', ax=ax1, width=0.8)
-            ax1.set_title(f'{model_type.upper()} Standard Performance Metrics - Top {n} Categories', fontsize=14)
-            ax1.set_ylabel('Score')
-            ax1.set_ylim(0.3, 1.0)
-            ax1.tick_params(axis='x', rotation=45)
-            ax1.grid(axis='y', alpha=0.3)
-            ax1.legend(title='Metric')
+            available_standard = [m for m in standard_metrics if m in df_plot_combined.columns]
+            if available_standard:
+                df_plot_combined[available_standard].plot(kind='bar', ax=ax1, width=0.8)
+                ax1.set_title(f'{model_type.upper()} Standard Performance Metrics - Top {n} Categories', fontsize=14)
+                ax1.set_ylabel('Score')
+                ax1.set_ylim(0, 1.0)
+                ax1.tick_params(axis='x', rotation=45)
+                ax1.grid(axis='y', alpha=0.3)
+                ax1.legend(title='Metric')
             
             # Top-K accuracy metrics
             topk_metrics = ['top1_accuracy', 'top3_accuracy', 'top5_accuracy']
@@ -392,7 +420,7 @@ class ModelEvaluator:
                 df_plot_combined[available_topk].plot(kind='bar', ax=ax2, width=0.8)
                 ax2.set_title(f'{model_type.upper()} Top-K Accuracy Metrics - Top {n} Categories', fontsize=14)
                 ax2.set_ylabel('Top-K Accuracy')
-                ax2.set_ylim(0.3, 1.0)
+                ax2.set_ylim(0, 1.0)
                 ax2.tick_params(axis='x', rotation=45)
                 ax2.grid(axis='y', alpha=0.3)
                 ax2.legend(title='Top-K Metric')
@@ -412,64 +440,70 @@ class ModelEvaluator:
         summary_data = []
         for n in CATEGORY_SIZES:
             if n in final_results:
-                for entry in final_results[n]:
-                    summary_entry = {
-                        'Categories': n,
-                        'Model': entry['model'],
-                        'Feature': entry['feature_type'],
-                        'Accuracy': entry['accuracy'],
-                        'F1-Score': entry['f1_score'],
-                        'Top-1': entry.get('top1_accuracy', entry['accuracy']),
-                        'Top-3': entry.get('top3_accuracy', 0),
-                        'Top-5': entry.get('top5_accuracy', 0)
-                    }
-                    
-                    if model_type.lower() == "dl":
-                        summary_entry.update({
-                            'Training Time': entry.get('training_time', 0),
-                            'Inference Time': entry.get('inference_time', 0)
-                        })
-                    
-                    summary_data.append(summary_entry)
+                # Handle different result structures
+                results_list = []
+                if isinstance(final_results[n], list):
+                    results_list = final_results[n]
+                elif isinstance(final_results[n], dict):
+                    for key, value in final_results[n].items():
+                        if isinstance(value, dict):
+                            if 'model' not in value:
+                                value['model'] = key
+                            results_list.append(value)
+                
+                for entry in results_list:
+                    if isinstance(entry, dict):
+                        summary_entry = {
+                            'Categories': n,
+                            'Model': entry.get('model', 'Unknown'),
+                            'Feature': entry.get('feature_type', 'unknown'),
+                            'Accuracy': entry.get('accuracy', 0),
+                            'F1-Score': entry.get('f1_score', entry.get('macro_f1', 0)),
+                            'Top-1': entry.get('top1_accuracy', entry.get('accuracy', 0)),
+                            'Top-3': entry.get('top3_accuracy', 0),
+                            'Top-5': entry.get('top5_accuracy', 0)
+                        }
+                        
+                        if model_type.lower() == "dl":
+                            summary_entry.update({
+                                'Training Time': entry.get('training_time', 0),
+                                'Inference Time': entry.get('inference_time', 0)
+                            })
+                        
+                        summary_data.append(summary_entry)
         
-        summary_df = pd.DataFrame(summary_data)
-        summary_df = summary_df.round(4)
-        
-        # Save summary table
-        summary_path = charts_dir / f"{model_type.upper()}_Model_Performance_summary.csv"
-        summary_df.to_csv(summary_path, index=False)
-        print(f"{model_type.upper()} summary table saved: {summary_path}")
-        
-        # Display best performing models
-        print(f"\nTop performing {model_type.upper()} models by metric:")
-        for metric in ['Accuracy', 'F1-Score', 'Top-1', 'Top-3', 'Top-5']:
-            if metric in summary_df.columns:
-                best = summary_df.loc[summary_df[metric].idxmax()]
-                print(f"  {metric}: {best['Model']} ({best['Feature']}) on {best['Categories']} categories = {best[metric]:.4f}")
-        
-        # Best model overall
-        if len(summary_df) > 0:
-            best_overall = summary_df.loc[summary_df['Top-1'].idxmax()]
-            print(f"\nBest Overall {model_type.upper()} Model:")
-            print(f"  {best_overall['Model']} ({best_overall['Feature']}) on {best_overall['Categories']} categories")
-            print(f"  Top-1 Accuracy: {best_overall['Top-1']:.4f}")
-            print(f"  F1-Score: {best_overall['F1-Score']:.4f}")
-            if model_type.lower() == "dl" and 'Training Time' in summary_df.columns:
-                print(f"  Training Time: {best_overall['Training Time']:.2f}s")
+        if summary_data:
+            summary_df = pd.DataFrame(summary_data)
+            summary_df = summary_df.round(4)
+            
+            # Save summary table
+            summary_path = charts_dir / f"{model_type.upper()}_Model_Performance_summary.csv"
+            summary_df.to_csv(summary_path, index=False)
+            print(f"{model_type.upper()} summary table saved: {summary_path}")
+            
+            # Display best performing models
+            print(f"\nTop performing {model_type.upper()} models by metric:")
+            for metric in ['Accuracy', 'F1-Score', 'Top-1', 'Top-3', 'Top-5']:
+                if metric in summary_df.columns and len(summary_df) > 0:
+                    best = summary_df.loc[summary_df[metric].idxmax()]
+                    print(f"  {metric}: {best['Model']} ({best['Feature']}) on {best['Categories']} categories = {best[metric]:.4f}")
+            
+            # Best model overall
+            if len(summary_df) > 0 and 'Top-1' in summary_df.columns:
+                best_overall = summary_df.loc[summary_df['Top-1'].idxmax()]
+                print(f"\nBest Overall {model_type.upper()} Model:")
+                print(f"  {best_overall['Model']} ({best_overall['Feature']}) on {best_overall['Categories']} categories")
+                print(f"  Top-1 Accuracy: {best_overall['Top-1']:.4f}")
+                print(f"  F1-Score: {best_overall['F1-Score']:.4f}")
+                if model_type.lower() == "dl" and 'Training Time' in summary_df.columns:
+                    print(f"  Training Time: {best_overall['Training Time']:.2f}s")
     
-    def generate_radar_plots(self, model_type="ml", show_plots=False):
-        """
-        Generate radar plots for model performance across categories
-        
-        Args:
-            model_type (str): "ml" or "dl"
-            show_plots (bool): If True, also show interactive plots
-        """
+    def generate_radar_plots(self, model_type, show_plots=False):
+        """Generate radar plots for model performance across categories"""
         from math import pi
         
         # Model naming patterns for file reading
         NAMING_PATTERNS = {
-            # snake_case (config) → PascalCase (model name)
             "logistic_regression": "LogisticRegression",
             "random_forest": "RandomForest",        
             "xgboost": "XGBoost",
@@ -478,19 +512,48 @@ class ModelEvaluator:
         
         # Get model configuration based on type
         if model_type.lower() == "ml":
-            from src.config import ML_CONFIG
-            models = ML_CONFIG["models"]
-            results_paths = RESULTS_CONFIG["ml_category_paths"]
-            save_dir = RESULTS_CONFIG["ml_comparisons_path"]
-            title_prefix = "ML Models"
-            feature_types = ["tfidf", "sbert"]
+            try:
+                from src.config import ML_CONFIG
+                models = ML_CONFIG.get("models", ["LogisticRegression", "RandomForest", "XGBoost"])
+                results_paths = RESULTS_CONFIG["ml_category_paths"]
+                save_dir = RESULTS_CONFIG["ml_comparisons_path"]
+                title_prefix = "ML Models"
+                feature_types = ["tfidf", "sbert"]
+            except:
+                models = ["LogisticRegression", "RandomForest", "XGBoost"]
+                results_paths = RESULTS_CONFIG["ml_category_paths"]
+                save_dir = RESULTS_CONFIG["ml_comparisons_path"]
+                title_prefix = "ML Models"
+                feature_types = ["tfidf", "sbert"]
+        elif model_type.lower() == "dl":
+            try:
+                from src.config import DL_CONFIG
+                models = DL_CONFIG.get("models", ["BiLSTM"]) 
+                results_paths = RESULTS_CONFIG["dl_category_paths"]
+                save_dir = RESULTS_CONFIG["dl_comparisons_path"]
+                title_prefix = "DL Models"
+                feature_types = DL_CONFIG.get("feature_types", ["tfidf", "sbert"])
+            except:
+                models = ["BiLSTM"]
+                results_paths = RESULTS_CONFIG["dl_category_paths"]
+                save_dir = RESULTS_CONFIG["dl_comparisons_path"]
+                title_prefix = "DL Models"
+                feature_types = ["tfidf", "sbert"]
+        elif model_type.lower() == "bert":
+            models = ["RoBERTa_Base", "RoBERTa_Large"]
+            results_paths = RESULTS_CONFIG["bert_category_paths"]
+            save_dir = RESULTS_CONFIG["bert_comparisons_path"]
+            title_prefix = "BERT Models"
+            feature_types = ["raw_text"]
+        elif model_type.lower() == "deepseek":
+            models = ["DeepSeek_7B_Base"]
+            results_paths = RESULTS_CONFIG["deepseek_category_paths"]
+            save_dir = RESULTS_CONFIG["deepseek_comparisons_path"]
+            title_prefix = "DeepSeek Models"
+            feature_types = ["raw_text"]
         else:
-            from src.config import DL_CONFIG
-            models = DL_CONFIG["models"] 
-            results_paths = RESULTS_CONFIG["dl_category_paths"]
-            save_dir = RESULTS_CONFIG["dl_comparisons_path"]
-            title_prefix = "DL Models"
-            feature_types = DL_CONFIG.get("feature_types", ["tfidf", "sbert"])
+            logger.warning(f"Unknown model type: {model_type}")
+            return
         
         save_dir.mkdir(parents=True, exist_ok=True)
         
@@ -523,8 +586,10 @@ class ModelEvaluator:
             for feature in feature_types:
                 # Convert model name using naming patterns
                 model_display_name = naming_patterns.get(model, model)
-                file_name = f"{model_display_name}_{feature}_top_{num_cat}_categories_classification_report.csv"
-                file_path = category_path / file_name
+                filename = FileNamingStandard.generate_classification_report_filename(
+                    model_display_name, feature, num_cat
+                )
+                file_path = category_path / filename
 
                 if not file_path.exists():
                     logger.warning(f"Missing radar data file: {file_path}")
@@ -635,19 +700,3 @@ class ModelEvaluator:
         if show_plots:
             plt.show()
         plt.close()
-    
-    def plot_results_with_radar(self, results_file_path, charts_dir, model_type="ml", show_plots=False):
-        """
-        Generate comprehensive plots including radar charts
-        
-        Args:
-            results_file_path (Path): Path to the final_results.pkl file
-            charts_dir (Path): Directory to save charts
-            model_type (str): "ml" or "dl" 
-            show_plots (bool): Whether to show interactive plots
-        """
-        # Generate standard comparison plots
-        self.plot_results_comparison(results_file_path, charts_dir, model_type)
-        
-        # Generate radar plots
-        self.generate_radar_plots(model_type, show_plots)
