@@ -37,17 +37,63 @@ LOGGING_CONFIG = {
 
 # Data configuration
 DATA_CONFIG = {
-    'raw_data_path': DATA_PATH / "raw",
+    'raw_data_path': DATA_PATH / "raw" / "webservices_dataset.csv",  # Specific file path
     'processed_data_path': DATA_PATH / "processed",
-    'analysis_path': DATA_PATH / "analysis"
+    'analysis_path': DATA_PATH / "analysis",
+    'text_column': 'Service Description',  # Column name for text data
+    'target_column': 'Category',  # Column name for categories
 }
+
+# Analysis paths (used by data_analysis.py)
+ANALYSIS_PATH = DATA_CONFIG['analysis_path']
 
 # Preprocessing configuration
 PREPROCESSING_CONFIG = {
     'splits': str(DATA_PATH / "splits" / "top_{n}_categories"),
+    'labels': str(DATA_PATH / "splits" / "top_{n}_categories" / "labels.yaml"),
+    'processed_data': str(DATA_PATH / "processed" / "top_{n}_categories"),
     'cleaned_data': str(DATA_PATH / "processed" / "cleaned_data.csv"),
-    'features_path': DATA_PATH / "features"
+    'features_path': DATA_PATH / "features",
+    # Text preprocessing settings
+    'remove_stopwords': True,
+    'lemmatization': True,
+    'remove_numbers': True,
+    'min_word_length': 2,
+    'max_word_length': 50,
+    'custom_stopwords': []
 }
+
+# Split configuration (used by data_preprocessing.py)
+SPLIT_CONFIG = {
+    'test_size': 0.2,
+    'val_size': 0.1,
+    'random_state': RANDOM_SEED,
+    'stratify': True
+}
+
+# Feature extraction configuration
+FEATURES_CONFIG = {
+    'tfidf_path': str(DATA_PATH / "features" / "tfidf" / "top_{n}_categories"),
+    'sbert_path': str(DATA_PATH / "features" / "sbert" / "top_{n}_categories"),
+    'plots': str(DATA_PATH / "features" / "plots"),
+    'tfidf': {
+        'max_features': 10000,
+        'ngram_range': (1, 2),
+        'stop_words': 'english'
+    },
+    'sbert': {
+        'model_name': 'all-MiniLM-L6-v2',
+        'show_progress_bar': True,
+        'batch_size': 32,
+        'normalize_embeddings': True
+    }
+}
+
+# Preprocessing path alias (referenced in other modules)
+PREPROCESS_PATH = PREPROCESSING_CONFIG['features_path']
+
+# Feature extraction configuration alias (for backward compatibility)
+FEATURE_EXTRACTION_CONFIG = FEATURES_CONFIG
 
 # Results configuration - CRITICAL for proper file organization
 RESULTS_CONFIG = {
@@ -164,6 +210,8 @@ BERT_CONFIG = {
     'learning_rate': 2e-5,
     'weight_decay': 0.01,
     'warmup_steps': 500,
+    'per_device_train_batch_size': 16,  # Default batch size
+    'per_device_eval_batch_size': 32,   # Default eval batch size
     'batch_sizes': {
         'roberta-base': {
             'train_batch_size': 16,
@@ -224,18 +272,6 @@ DEEPSEEK_CONFIG = {
     }
 }
 
-# Feature extraction configuration
-FEATURE_EXTRACTION_CONFIG = {
-    'tfidf': {
-        'max_features': 10000,
-        'ngram_range': (1, 2),
-        'stop_words': 'english'
-    },
-    'sbert': {
-        'model_name': 'all-MiniLM-L6-v2'
-    }
-}
-
 def create_all_directories():
     """Create all necessary directories"""
     directories = [
@@ -244,6 +280,7 @@ def create_all_directories():
         DATA_PATH / "splits",
         DATA_PATH / "features" / "tfidf",
         DATA_PATH / "features" / "sbert",
+        DATA_PATH / "features" / "plots",
         DATA_PATH / "analysis",
         MODELS_PATH / "saved_models" / "ml_models",
         MODELS_PATH / "saved_models" / "dl_models",
@@ -260,6 +297,11 @@ def create_all_directories():
     # Create category-specific directories
     for n_categories in CATEGORY_SIZES:
         directories.extend([
+            DATA_PATH / "splits" / f"top_{n_categories}_categories",
+            DATA_PATH / "processed" / f"top_{n_categories}_categories",
+            DATA_PATH / "features" / "tfidf" / f"top_{n_categories}_categories",
+            DATA_PATH / "features" / "sbert" / f"top_{n_categories}_categories",
+            DATA_PATH / "analysis" / f"top_{n_categories}_categories",
             RESULTS_PATH / "ml" / f"top_{n_categories}_categories",
             RESULTS_PATH / "dl" / f"top_{n_categories}_categories", 
             RESULTS_PATH / "bert" / f"top_{n_categories}_categories",
