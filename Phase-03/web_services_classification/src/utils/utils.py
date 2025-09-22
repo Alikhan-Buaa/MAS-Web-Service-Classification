@@ -17,8 +17,15 @@ import os
 import sys
 
 # Add config to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from config import LOGGING_CONFIG, DATA_CONFIG, RESULTS_CONFIG
+sys.path.append(str(Path(__file__).parent.parent))
+try:
+    from config import LOGGING_CONFIG, DATA_CONFIG, RESULTS_CONFIG
+except ImportError:
+    # Fallback if config import fails
+    LOGGING_CONFIG = {
+        'format': '%(asctime)s - %(levelname)s - %(message)s',
+        'handlers': {'console': True, 'file': True}
+    }
 
 
 def setup_logging(log_file: Optional[Path] = None, 
@@ -33,7 +40,7 @@ def setup_logging(log_file: Optional[Path] = None,
         format_str: Log format string
     """
     if format_str is None:
-        format_str = LOGGING_CONFIG['format']
+        format_str = LOGGING_CONFIG.get('format', '%(asctime)s - %(levelname)s - %(message)s')
     
     logging_level = getattr(logging, level.upper())
     
@@ -48,14 +55,14 @@ def setup_logging(log_file: Optional[Path] = None,
     logger.handlers.clear()
     
     # Console handler
-    if LOGGING_CONFIG['handlers']['console']:
+    if LOGGING_CONFIG.get('handlers', {}).get('console', True):
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging_level)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
     
     # File handler
-    if LOGGING_CONFIG['handlers']['file'] and log_file:
+    if LOGGING_CONFIG.get('handlers', {}).get('file', True) and log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging_level)
@@ -166,198 +173,6 @@ def save_data(data: Any,
         raise
 
 
-def save_results(results: Dict[str, Any], 
-                model_name: str, 
-                feature_type: str, 
-                n_categories: int,
-                result_type: str = "evaluation") -> None:
-    """
-    Save model results in multiple formats
-    
-    Args:
-        results: Results dictionary to save
-        model_name: Name of the model
-        feature_type: Type of features used
-        n_categories: Number of categories
-        result_type: Type of results ('evaluation', 'training', 'predictions')
-    """
-    from config import get_results_filename, get_results_dir
-    
-    # Determine model type
-    model_type = 'dl' if model_name in ['bilstm'] else 'ml'
-    
-    # Get results directory
-    results_dir = get_results_dir(model_type, n_categories)
-    results_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Add metadata
-    results['metadata'] = {
-        'model_name': model_name,
-        'feature_type': feature_type,
-        'n_categories': n_categories,
-        'result_type': result_type,
-        'timestamp': datetime.now().isoformat(),
-        'total_samples': results.get('total_samples', 'unknown')
-    }
-    
-    # Save in multiple formats
-    base_filename = f"{model_name}_{feature_type}_top{n_categories}_{result_type}"
-    
-    for format_type in ['json', 'yaml']:
-        filename = f"{base_filename}.{format_type}"
-        save_data(results, results_dir / filename, format_type)
-    
-    logging.info(f"Results saved for {model_name} with {feature_type} features (top {n_categories})")
-
-
-def load_model(model_path: Union[str, Path]) -> Any:
-    """
-    Load a trained model
-    
-    Args:
-        model_path: Path to the model file
-    
-    Returns:
-        Loaded model
-    """
-    model_path = Path(model_path)
-    
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    
-    file_extension = model_path.suffix.lower()
-    
-    if file_extension == '.joblib':
-        return joblib.load(model_path)
-    elif file_extension in ['.pkl', '.pickle']:
-        with open(model_path, 'rb') as f:
-            return pickle.load(f)
-    elif file_extension == '.h5':
-        # For Keras/TensorFlow models
-        try:
-            from tensorflow.keras.models import load_model as keras_load_model
-            return keras_load_model(model_path)
-        except ImportError:
-            raise ImportError("TensorFlow/Keras not available for loading .h5 models")
-    else:
-        raise ValueError(f"Unsupported model file format: {file_extension}")
-
-
-def save_model(model: Any, 
-               model_path: Union[str, Path], 
-               metadata: Optional[Dict[str, Any]] = None) -> None:
-    """
-    Save a trained model
-    
-    Args:
-        model: Model to save
-        model_path: Path to save the model
-        metadata: Optional metadata to save alongside
-    """
-    model_path = Path(model_path)
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    file_extension = model_path.suffix.lower()
-    
-    try:
-        if file_extension == '.joblib':
-            joblib.dump(model, model_path, compress=3)
-        elif file_extension in ['.pkl', '.pickle']:
-            with open(model_path, 'wb') as f:
-                pickle.dump(model, f, protocol=pickle.HIGHEST_PROTOCOL)
-        elif file_extension == '.h5':
-            # For Keras/TensorFlow models
-            model.save(model_path)
-        else:
-            raise ValueError(f"Unsupported model file format: {file_extension}")
-        
-        # Save metadata if provided
-        if metadata:
-            metadata_path = model_path.with_suffix('.json')
-            save_data(metadata, metadata_path, 'json')
-            
-        logging.info(f"Model saved to {model_path}")
-        
-    except Exception as e:
-        logging.error(f"Error saving model to {model_path}: {str(e)}")
-        raise
-
-
-def create_directory_structure():
-    """Create the complete directory structure for the project"""
-    from config import DATA_PATH, MODELS_PATH, RESULTS_PATH, LOGS_PATH
-    
-    directories = [
-        DATA_PATH / "raw",
-        DATA_PATH / "processed",
-        DATA_PATH / "splits",
-        DATA_PATH / "analysis" / "plots",
-        DATA_PATH / "analysis" / "statistics", 
-        DATA_PATH / "analysis" / "reports",
-        DATA_PATH / "features" / "tfidf",
-        DATA_PATH / "features" / "sbert",
-        MODELS_PATH / "saved_models" / "ml_models",
-        MODELS_PATH / "saved_models" / "dl_models",
-        MODELS_PATH / "model_configs" / "ml_configs",
-        MODELS_PATH / "model_configs" / "dl_configs",
-        RESULTS_PATH / "ml_models" / "category_wise",
-        RESULTS_PATH / "dl_models" / "category_wise",
-        RESULTS_PATH / "benchmarks",
-        RESULTS_PATH / "topk_analysis",
-        RESULTS_PATH / "overall_comparisons",
-        LOGS_PATH
-    ]
-    
-    for directory in directories:
-        directory.mkdir(parents=True, exist_ok=True)
-    
-    logging.info("Directory structure created successfully")
-
-
-def validate_dataset(df: pd.DataFrame, 
-                     text_column: str, 
-                     target_column: str) -> Dict[str, Any]:
-    """
-    Validate dataset quality and characteristics
-    
-    Args:
-        df: DataFrame to validate
-        text_column: Name of text column
-        target_column: Name of target column
-    
-    Returns:
-        Dictionary with validation results
-    """
-    validation_results = {
-        'total_samples': len(df),
-        'missing_text': df[text_column].isnull().sum(),
-        'missing_labels': df[target_column].isnull().sum(),
-        'empty_text': (df[text_column].str.strip() == '').sum(),
-        'unique_labels': df[target_column].nunique(),
-        'label_distribution': df[target_column].value_counts().to_dict(),
-        'avg_text_length': df[text_column].str.len().mean(),
-        'min_text_length': df[text_column].str.len().min(),
-        'max_text_length': df[text_column].str.len().max(),
-        'duplicates': df.duplicated().sum()
-    }
-    
-    # Check for issues
-    issues = []
-    if validation_results['missing_text'] > 0:
-        issues.append(f"Missing text values: {validation_results['missing_text']}")
-    if validation_results['missing_labels'] > 0:
-        issues.append(f"Missing labels: {validation_results['missing_labels']}")
-    if validation_results['empty_text'] > 0:
-        issues.append(f"Empty text entries: {validation_results['empty_text']}")
-    if validation_results['duplicates'] > 0:
-        issues.append(f"Duplicate entries: {validation_results['duplicates']}")
-    
-    validation_results['issues'] = issues
-    validation_results['is_valid'] = len(issues) == 0
-    
-    return validation_results
-
-
 def get_timestamp() -> str:
     """Get current timestamp as formatted string"""
     return datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -423,49 +238,6 @@ def format_metrics(metrics: Dict[str, float],
     return formatted
 
 
-def compute_class_weights(y: Union[np.ndarray, pd.Series]) -> Dict[int, float]:
-    """
-    Compute class weights for imbalanced datasets
-    
-    Args:
-        y: Target labels
-    
-    Returns:
-        Dictionary mapping class indices to weights
-    """
-    from sklearn.utils.class_weight import compute_class_weight
-    
-    unique_classes = np.unique(y)
-    class_weights = compute_class_weight(
-        'balanced', 
-        classes=unique_classes, 
-        y=y
-    )
-    
-    return dict(zip(unique_classes, class_weights))
-
-
-def memory_usage_check() -> Dict[str, str]:
-    """
-    Check current memory usage
-    
-    Returns:
-        Dictionary with memory usage information
-    """
-    import psutil
-    import os
-    
-    process = psutil.Process(os.getpid())
-    memory_info = process.memory_info()
-    
-    return {
-        'rss_mb': f"{memory_info.rss / 1024 / 1024:.2f}",
-        'vms_mb': f"{memory_info.vms / 1024 / 1024:.2f}",
-        'percent': f"{process.memory_percent():.2f}",
-        'available_gb': f"{psutil.virtual_memory().available / 1024 / 1024 / 1024:.2f}"
-    }
-
-
 def print_section_header(title: str, char: str = "=", width: int = 80) -> None:
     """
     Print a formatted section header
@@ -488,11 +260,67 @@ def print_section_header(title: str, char: str = "=", width: int = 80) -> None:
         print(line)
 
 
+class FileNamingStandard:
+    """Standardized file naming conventions across all model types"""
+    
+    @staticmethod
+    def standardize_model_name(model_name):
+        """Convert model name to standard format"""
+        # Handle specific model name mappings
+        name_mappings = {
+            'RoBERTa-Base': 'RoBERTa_Base',
+            'RoBERTa-Large': 'RoBERTa_Large', 
+            'DeepSeek-7B-Base': 'DeepSeek_7B_Base',
+            'Random Forest': 'RandomForest',
+            'Logistic Regression': 'LogisticRegression',
+            'Support Vector Machine': 'SVM',
+            'Naive Bayes': 'NaiveBayes',
+            'XGBoost': 'XGBoost',
+            'Bi-LSTM': 'BiLSTM',
+            'BiLSTM': 'BiLSTM',
+            'Text CNN': 'TextCNN',
+            'LogisticRegression': 'LogisticRegression',  # Already clean
+            'RandomForest': 'RandomForest',  # Already clean
+        }
+        
+        # Use mapping if available, otherwise clean the name
+        if model_name in name_mappings:
+            return name_mappings[model_name]
+        else:
+            # Generic cleaning: remove special chars, replace spaces/hyphens with underscores
+            clean_name = model_name.replace(' ', '_').replace('-', '_')
+            # Remove any remaining special characters except underscores
+            clean_name = ''.join(c for c in clean_name if c.isalnum() or c == '_')
+            return clean_name
+    
+    @staticmethod
+    def generate_confusion_matrix_filename(model_name, feature_type, n_categories, file_format='png'):
+        """Generate standardized confusion matrix filename"""
+        clean_model = FileNamingStandard.standardize_model_name(model_name)
+        return f"{clean_model}_{feature_type}_top_{n_categories}_categories_confusion_matrix.{file_format}"
+    
+    @staticmethod
+    def generate_classification_report_filename(model_name, feature_type, n_categories, file_format='csv'):
+        """Generate standardized classification report filename"""
+        clean_model = FileNamingStandard.standardize_model_name(model_name)
+        return f"{clean_model}_{feature_type}_top_{n_categories}_categories_classification_report.{file_format}"
+    
+    @staticmethod
+    def generate_training_history_filename(model_name, n_categories, file_format='png'):
+        """Generate standardized training history filename"""
+        clean_model = FileNamingStandard.standardize_model_name(model_name)
+        return f"{clean_model}_top_{n_categories}_categories_training_history.{file_format}"
+    
+    @staticmethod
+    def generate_model_filename(model_name, feature_type, n_categories, file_format='pkl'):
+        """Generate standardized model filename"""
+        clean_model = FileNamingStandard.standardize_model_name(model_name)
+        return f"{clean_model}_{feature_type}_top_{n_categories}_categories.{file_format}"
+
+
 # Export commonly used functions
 __all__ = [
-    'setup_logging', 'load_data', 'save_data', 'save_results',
-    'load_model', 'save_model', 'create_directory_structure',
-    'validate_dataset', 'get_timestamp', 'ensure_reproducibility',
-    'format_metrics', 'compute_class_weights', 'memory_usage_check',
-    'print_section_header'
+    'setup_logging', 'load_data', 'save_data', 
+    'get_timestamp', 'ensure_reproducibility',
+    'format_metrics', 'print_section_header', 'FileNamingStandard'
 ]

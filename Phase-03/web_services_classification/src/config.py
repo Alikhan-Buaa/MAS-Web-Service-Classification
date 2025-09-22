@@ -1,502 +1,276 @@
 """
-Configuration settings for Web Service Classification Project
-Updated to include BERT model configuration
-
-Centralizes all configuration settings used across the project.
-Ensures consistency, maintainability, and easy management of paths,
-hyperparameters, and evaluation options.
-
-Project Structure:
-- src/               → source code
-- data/              → raw, processed, and feature data
-- models/            → saved ML & DL models
-- results/           → analysis outputs and evaluation results
-- logs/              → logging outputs
+Configuration file for Web Services Classification Project
+Enhanced to ensure consistency across all model types
 """
 
 from pathlib import Path
 
-# =============================================================================
-# Project Paths
-# =============================================================================
-PROJECT_ROOT = Path(__file__).parent.parent  # Project root (1 level up from src/)
+# Base paths
+PROJECT_ROOT = Path(__file__).parent
 DATA_PATH = PROJECT_ROOT / "data"
 MODELS_PATH = PROJECT_ROOT / "models"
 RESULTS_PATH = PROJECT_ROOT / "results"
 LOGS_PATH = PROJECT_ROOT / "logs"
 
-# =============================================================================
-# General Settings
-# =============================================================================
-CATEGORY_SIZES = [50]  # Number of top categories to use
-RANDOM_SEED = 42                       # Global seed for reproducibility
+# Random seed for reproducibility
+RANDOM_SEED = 42
 
-# =============================================================================
-# Data Configuration
-# =============================================================================
+# Category sizes to process
+CATEGORY_SIZES = [50]
+
+# Logging configuration
+LOGGING_CONFIG = {
+    'level': 'INFO',
+    'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    'handlers': {
+        'console': True,
+        'file': True
+    },
+    'log_files': {
+        'data_analysis': LOGS_PATH / 'data_analysis.log',
+        'preprocessing': LOGS_PATH / 'preprocessing.log',
+        'feature_extraction': LOGS_PATH / 'feature_extraction.log',
+        'training': LOGS_PATH / 'training.log',
+        'evaluation': LOGS_PATH / 'evaluation.log'
+    }
+}
+
+# Data configuration
 DATA_CONFIG = {
-    # Input data
-    "raw_data_path": DATA_PATH / "raw" / "web_services_dataset.csv",
-    
-    # Processed data path (added for DL models)
-    "processed_data_path": DATA_PATH / "processed",
-
-    # Column names (adjust if CSV schema changes)
-    "text_column": "Service Description",          # service description text
-    "target_column": "Service Classification",     # classification labels
+    'raw_data_path': DATA_PATH / "raw",
+    'processed_data_path': DATA_PATH / "processed",
+    'analysis_path': DATA_PATH / "analysis"
 }
 
-# =============================================================================
-# Step 1: Analysis - Uniform top_{n}_categories naming
-# =============================================================================
-ANALYSIS_PATH = DATA_PATH / "analysis"
-ANALYSIS_CONFIG = {
-    "overall": ANALYSIS_PATH / "overall",                    # global dataset stats & plots
-    "category_wise": ANALYSIS_PATH / "top_{n}_categories",   # Top-N stats & distributions (uniform naming)
-    "comparisons": ANALYSIS_PATH / "comparisons"             # cross-TopN comparisons
-}
-
-# =============================================================================
-# Step 2: Preprocessing - Uniform top_{n}_categories naming
-# =============================================================================
-PREPROCESS_PATH = DATA_PATH / "processed"
+# Preprocessing configuration
 PREPROCESSING_CONFIG = {
-    "processed_data": str(PREPROCESS_PATH / "top_{n}_categories"),        # cleaned datasets (uniform naming)
-    "splits": str(PREPROCESS_PATH / "splits" / "top_{n}_categories"),     # train/val/test splits (uniform naming)
-    "labels": str(PREPROCESS_PATH / "labels_top_{n}_categories.yaml"),    # label mappings (uniform naming)
-
-    # Basic text cleaning
-    "remove_stopwords": False,
-    "remove_numbers": True,
-    "lemmatization": True,
-    "lowercase": True,
-    "remove_punctuation": True,
-
-    # Word filtering
-    "min_word_length": 2,
-    "max_word_length": 50,
-
-    # Custom stopwords
-    "custom_stopwords": ["a", "an", "the", "and", "or", "but", "in", "on", "at", "to"],
-
-    # Advanced cleaning
-    "remove_urls": True,
-    "remove_emails": True,
-    "normalize_whitespace": True
+    'splits': str(DATA_PATH / "splits" / "top_{n}_categories"),
+    'cleaned_data': str(DATA_PATH / "processed" / "cleaned_data.csv"),
+    'features_path': DATA_PATH / "features"
 }
 
-# =============================================================================
-# Step 3: Features - Uniform top_{n}_categories naming
-# =============================================================================
-FEATURES_PATH = DATA_PATH / "features"
-FEATURES_CONFIG = {
-    "tfidf_path": str(FEATURES_PATH / "tfidf" / "top_{n}_categories"),   # TF-IDF vectors (consistent naming)
-    "sbert_path": str(FEATURES_PATH / "sbert" / "top_{n}_categories"),   # SBERT embeddings (consistent naming)
-    "plots": FEATURES_PATH / "feature_plots",                            # tfidf_top_terms, sbert_clusters
-    "stats": FEATURES_PATH / "feature_stats",                            # vocab/embedding stats
-
-    # TF-IDF settings
-    "tfidf": {
-        "max_features": 10000,
-        "ngram_range": (1, 3),
-        "min_df": 2,
-        "max_df": 0.95,
-        "use_idf": True,
-        "smooth_idf": True,
-        "sublinear_tf": True
-    },
-
-    # SBERT settings
-    "sbert": {
-        "model_name": "all-MiniLM-L6-v2",
-        "max_length": 512,
-        "batch_size": 32,
-        "device": "cpu",  # change to "cuda" for GPU
-        "normalize_embeddings": True,
-        "show_progress_bar": True,
-        "convert_to_tensor": False,
-        "convert_to_numpy": True
-    }
-}
-
-# =============================================================================
-# Data Split Configuration
-# =============================================================================
-SPLIT_CONFIG = {
-    "train_size": 0.80,       # proportion of data for training
-    "val_size": 0.10,         # proportion of data for validation
-    "test_size": 0.10,        # proportion of data for testing
-    "random_state": RANDOM_SEED,  # reproducibility
-    "stratify": True,         # preserve label distribution in splits
-    "shuffle": True           # shuffle before splitting
-}
-
-# =============================================================================
-# Machine Learning Configuration
-# =============================================================================
-ML_CONFIG = {
-    # Models to train
-    "models": ["logistic_regression", "random_forest", "xgboost"],
-
-    # Feature types to use
-    "feature_types": ["tfidf", "sbert"],
-
-    # Cross-validation settings
-    "cv_folds": 5,
-    "cv_scoring": "f1_macro",
-    "cv_shuffle": True,
-    "cv_random_state": RANDOM_SEED,
-
-    # Model parameters
-    "logistic_regression": {
-        "C": 1.0,
-        "max_iter": 1000,
-        "random_state": RANDOM_SEED,
-        "n_jobs": -1,
-        "solver": "liblinear",
-        "multi_class": "ovr"
-    },
-    "random_forest": {
-        "n_estimators": 100,
-        "max_depth": 10,
-        "random_state": RANDOM_SEED,
-        "n_jobs": -1,
-        "min_samples_split": 2,
-        "min_samples_leaf": 1,
-        "max_features": "sqrt"
-    },
-    "xgboost": {
-        "n_estimators": 100,
-        "max_depth": 6,
-        "learning_rate": 0.1,
-        "random_state": RANDOM_SEED,
-        "n_jobs": -1,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "reg_alpha": 0,
-        "reg_lambda": 1
-    }
-}
-
-# =============================================================================
-# Deep Learning Configuration
-# =============================================================================
-DL_CONFIG = {
-    # Model architectures to train
-    "models": ["bilstm"],
-    
-    # Feature types to use
-    "feature_types": ["tfidf", "sbert"],
-    
-    # BiLSTM model parameters
-    "bilstm": {
-        "lstm_units": 128,
-        "dropout_rate": 0.3,
-        "learning_rate": 0.001,
-        "batch_size": 32,
-        "epochs": 50,
-        "patience": 10,
-        "validation_split": 0.2,
-        "optimizer": "adam",
-        "loss": "categorical_crossentropy",
-        "metrics": ["accuracy"]
-    },
-    
-    # Training callbacks
-    "callbacks": {
-        "early_stopping": {
-            "monitor": "val_accuracy",
-            "patience": 10,
-            "restore_best_weights": True
-        },
-        "reduce_lr": {
-            "monitor": "val_loss",
-            "factor": 0.5,
-            "patience": 5,
-            "min_lr": 1e-7
-        },
-        "model_checkpoint": {
-            "monitor": "val_accuracy",
-            "save_best_only": True,
-            "save_weights_only": False
-        }
-    }
-}
-
-# =============================================================================
-# BERT Configuration
-# =============================================================================
-BERT_CONFIG = {
-    # Available RoBERTa models
-    "models": ["roberta_base","roberta_large"],
-    
-    "available_models": {
-        "roberta_base": "roberta-base",
-        "roberta_large": "roberta-large"
-    },
-    
-    # Default model configuration
-    "model_name": "roberta-base",  # Default to base model
-    "max_length": 128,
-    "num_train_epochs": 10,  # Changed from 5 to 10
-    
-    # Training configuration  
-    "per_device_train_batch_size": 8,
-    "per_device_eval_batch_size": 8,
-    "learning_rate": 2e-5,
-    "weight_decay": 0.01,
-    "warmup_steps": 500,
-    
-    # Model-specific batch sizes (adjust for memory)
-    "batch_sizes": {
-        "roberta-base": {
-            "train_batch_size": 8,
-            "eval_batch_size": 8
-        },
-        "roberta-large": {
-            "train_batch_size": 4,  # Smaller batch for large model
-            "eval_batch_size": 4
-        }
-    },
-    
-    # Data configuration
-    "test_size": 0.2,
-    "seed": RANDOM_SEED,
-    
-    # Logging and output configuration
-    "logging_steps": 100,
-    "eval_strategy": "epoch",
-    "logging_strategy": "steps",
-    "save_strategy": "epoch", 
-    "load_best_model_at_end": True,
-    "metric_for_best_model": "f1",
-    "greater_is_better": True,
-    
-    # Additional BERT-specific settings
-    "gradient_accumulation_steps": 1,
-    "fp16": False,  # Set to True if using compatible GPU
-    "dataloader_drop_last": False,
-    "dataloader_num_workers": 0,
-    "remove_unused_columns": True,
-    "report_to": [],
-}
-
-# =============================================================================
-# DeepSeek Configuration
-# =============================================================================
-DEEPSEEK_CONFIG = {
-    # Model configuration
-    "model_name": "deepseek-ai/deepseek-llm-7b-base",
-    "trust_remote_code": True,
-    
-    # Tokenization settings
-    "max_length": 256,
-    "truncation": True,
-    "padding": "max_length",
-    
-    # Training configuration
-    "num_train_epochs": 3,
-    "per_device_train_batch_size": 2,
-    "per_device_eval_batch_size": 2,
-    "gradient_accumulation_steps": 4,
-    "learning_rate": 2e-4,
-    
-    # Data split configuration
-    "test_size": 0.2,
-    "random_state": RANDOM_SEED,
-    
-    # Evaluation and logging
-    "eval_strategy": "epoch",
-    "save_strategy": "epoch", 
-    "logging_steps": 10,
-    "save_total_limit": 2,
-    "load_best_model_at_end": True,
-    "metric_for_best_model": "f1",
-    "greater_is_better": True,
-    
-    # Performance optimization
-    "fp16": True,
-    "gradient_checkpointing": True,
-    "dataloader_drop_last": False,
-    "dataloader_num_workers": 0,
-    "remove_unused_columns": True,
-    "report_to": "none",
-    
-    # Quantization configuration (BitsAndBytesConfig)
-    "quantization": {
-        "load_in_4bit": True,
-        "bnb_4bit_use_double_quant": True,
-        "bnb_4bit_quant_type": "nf4",
-        "bnb_4bit_compute_dtype": "bfloat16",
-    },
-    
-    # LoRA (Low-Rank Adaptation) configuration
-    "lora": {
-        "r": 32,                    # Rank of adaptation
-        "lora_alpha": 32,          # LoRA scaling parameter
-        "lora_dropout": 0.05,      # LoRA dropout
-        "bias": "none",            # Bias type
-        "task_type": "SEQ_CLS",    # Task type for sequence classification
-    },
-    
-    # Text preprocessing configuration
-    "text_preprocessing": {
-        "clean_text": True,
-        "remove_stopwords": True,
-        "stemming": True,
-        "lemmatization": True,
-        "lowercase": True,
-        "remove_punctuation": True,
-        "remove_numbers": False,
-        "min_word_length": 2,
-        "custom_stopwords": [],
-    },
-    
-    # Available models for web service classification (base model only)
-    "available_models": {
-        "deepseek_7b_base": "deepseek-ai/deepseek-llm-7b-base"     # Optimal choice - good performance with reasonable resource requirements
-    },
-    
-    # Model-specific batch sizes (adjust based on GPU memory)
-    "batch_sizes": {
-        "deepseek-ai/deepseek-llm-7b-base": {
-            "train_batch_size": 2,
-            "eval_batch_size": 2,
-            "inference_batch_size": 8
-        }
-    },
-    
-    # Hardware requirements and recommendations
-    "hardware_requirements": {
-        "minimum_gpu_memory": "16GB",    # For 7B model with 4-bit quantization
-        "recommended_gpu_memory": "24GB", # For comfortable training
-        "cpu_fallback": True,            # Allow CPU fallback if no GPU
-        "mixed_precision": True,         # Enable mixed precision training
-    },
-    
-    # Monitoring and debugging
-    "monitoring": {
-        "log_training_loss": True,
-        "log_eval_metrics": True,
-        "save_training_plots": True,
-        "verbose_logging": True,
-    }
-}
-# =============================================================================
-# ML Models & Results Storage - Uniform top_{n}_categories naming
-# =============================================================================
-SAVED_MODELS_CONFIG = {
-    "ml_models_path": MODELS_PATH / "ml",  # trained ML models
-    "dl_models_path": MODELS_PATH / "dl",  # trained DL models
-    "bert_models_path": MODELS_PATH / "bert",  # trained BERT models
-    "deepseek_models_path": MODELS_PATH / "deepseek"
-}
-
+# Results configuration - CRITICAL for proper file organization
 RESULTS_CONFIG = {
     # ML Results
-    "ml_results_path": RESULTS_PATH / "ml",           # per-model results
-    "ml_comparisons_path": RESULTS_PATH / "ml_comparisons",  # cross-model comparisons
+    'ml_results_path': RESULTS_PATH / "ml",
+    'ml_comparisons_path': RESULTS_PATH / "ml" / "comparisons",
+    'ml_category_paths': {
+        n: RESULTS_PATH / "ml" / f"top_{n}_categories" for n in CATEGORY_SIZES
+    },
     
-    # DL Results
-    "dl_results_path": RESULTS_PATH / "dl",           # per-model DL results
-    "dl_comparisons_path": RESULTS_PATH / "dl_comparisons",  # cross-model DL comparisons
+    # DL Results  
+    'dl_results_path': RESULTS_PATH / "dl",
+    'dl_comparisons_path': RESULTS_PATH / "dl" / "comparisons",
+    'dl_category_paths': {
+        n: RESULTS_PATH / "dl" / f"top_{n}_categories" for n in CATEGORY_SIZES
+    },
     
     # BERT Results
-    "bert_results_path": RESULTS_PATH / "bert",       # per-model BERT results
-    "bert_comparisons_path": RESULTS_PATH / "bert_comparisons",  # cross-model BERT comparisons
+    'bert_results_path': RESULTS_PATH / "bert",
+    'bert_comparisons_path': RESULTS_PATH / "bert" / "comparisons",
+    'bert_category_paths': {
+        n: RESULTS_PATH / "bert" / f"top_{n}_categories" for n in CATEGORY_SIZES
+    },
     
-    "deepseek_results_path": RESULTS_PATH / "deepseek",
-    "deepseek_comparisons_path": RESULTS_PATH / "deepseek_comparisons",
+    # DeepSeek Results
+    'deepseek_results_path': RESULTS_PATH / "deepseek", 
+    'deepseek_comparisons_path': RESULTS_PATH / "deepseek" / "comparisons",
+    'deepseek_category_paths': {
+        n: RESULTS_PATH / "deepseek" / f"top_{n}_categories" for n in CATEGORY_SIZES
+    },
     
+    # Overall Results
+    'overall_results_path': RESULTS_PATH / "overall",
+}
 
-    # File naming patterns - uniform top_{n}_categories naming
-    "model_results_pattern": "{model_name}_{feature_type}_top_{n}_categories",
- 
-    # Category-wise results directories - uniform top_{n}_categories naming
-    "ml_category_paths": { 
-        50: RESULTS_PATH / "ml" / "top_50_categories"
+# Saved models configuration - CRITICAL for model storage
+SAVED_MODELS_CONFIG = {
+    'ml_models_path': MODELS_PATH / "saved_models" / "ml_models",
+    'dl_models_path': MODELS_PATH / "saved_models" / "dl_models", 
+    'bert_models_path': MODELS_PATH / "saved_models" / "bert_models",
+    'deepseek_models_path': MODELS_PATH / "saved_models" / "deepseek_models"
+}
+
+# ML Models configuration
+ML_CONFIG = {
+    'models': ['LogisticRegression', 'RandomForest', 'XGBoost'],
+    'logistic_regression': {
+        'max_iter': 1000,
+        'random_state': RANDOM_SEED,
+        'n_jobs': -1
     },
-    
-    # DL Category-wise results directories (same structure as ML)
-    "dl_category_paths": {
-        50: RESULTS_PATH / "dl" / "top_50_categories"
+    'random_forest': {
+        'n_estimators': 100,
+        'random_state': RANDOM_SEED,
+        'n_jobs': -1
     },
-    
-    # BERT Category-wise results directories
-    "bert_category_paths": {
-        50: RESULTS_PATH / "bert" / "top_50_categories"
-    },
-    
-    "deepseek_category_paths": {
-        50: RESULTS_PATH / "deepseek" / "top_50_categories"
+    'xgboost': {
+        'random_state': RANDOM_SEED,
+        'n_jobs': -1,
+        'eval_metric': 'mlogloss'
     }
 }
 
-# =============================================================================
-# Ensure Required Directories - Updated with uniform naming and BERT
-# =============================================================================
-for path in [
-    ANALYSIS_PATH,
-    PREPROCESS_PATH,
-    FEATURES_PATH,
-    MODELS_PATH,
-    RESULTS_PATH,
-    LOGS_PATH,
-    RESULTS_PATH / "ml",
-    RESULTS_PATH / "ml_comparisons",
-    RESULTS_PATH / "dl",
-    RESULTS_PATH / "dl_comparisons",
-    RESULTS_PATH / "bert",
-    RESULTS_PATH / "bert_comparisons",
-    RESULTS_PATH / "deepseek",
-    RESULTS_PATH / "deepseek_comparisons", 
-    MODELS_PATH / "dl",
-    MODELS_PATH / "bert",
-    MODELS_PATH / "deepseek",
-]:
-    path.mkdir(parents=True, exist_ok=True)
-
-# Create category-specific directories with uniform naming
-for n in CATEGORY_SIZES:
-    category_paths = [
-        ANALYSIS_PATH / f"top_{n}_categories",
-        PREPROCESS_PATH / f"top_{n}_categories",
-        PREPROCESS_PATH / "splits" / f"top_{n}_categories",
-        FEATURES_PATH / "tfidf" / f"top_{n}_categories",
-        FEATURES_PATH / "sbert" / f"top_{n}_categories",
-        MODELS_PATH / "ml" / f"top_{n}_categories",
-        MODELS_PATH / "dl" / f"top_{n}_categories",
-        MODELS_PATH / "bert" / f"top_{n}_categories",
-        RESULTS_PATH / "ml" / f"top_{n}_categories",
-        RESULTS_PATH / "dl" / f"top_{n}_categories",
-        RESULTS_PATH / "bert" / f"top_{n}_categories",
-        MODELS_PATH / "deepseek" / f"top_{n}_categories",
-        RESULTS_PATH / "deepseek" / f"top_{n}_categories"
-    ]
-    for path in category_paths:
-        path.mkdir(parents=True, exist_ok=True)
-
-# =============================================================================
-# Logging Configuration
-# =============================================================================
-LOGGING_CONFIG = {
-    "level": "INFO",   # Can be "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
-    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    "handlers": {
-        "file": True,      # Enable logging to file
-        "console": True    # Enable logging to console
+# DL Models configuration
+DL_CONFIG = {
+    'models': ['BiLSTM'],
+    'feature_types': ['tfidf', 'sbert'],
+    'bilstm': {
+        'lstm_units': 128,
+        'dropout_rate': 0.3,
+        'learning_rate': 0.001,
+        'batch_size': 32,
+        'epochs': 10,
+        'loss': 'categorical_crossentropy',
+        'metrics': ['accuracy']
     },
-    "log_files": {
-        "data_analysis": LOGS_PATH / "data_analysis.log",
-        "preprocessing": LOGS_PATH / "preprocessing.log",
-        "feature_extraction": LOGS_PATH / "feature_extraction.log",
-        "ml_training": LOGS_PATH / "ml_training.log",
-        "dl_training": LOGS_PATH / "dl_training.log",
-        "bert_training": LOGS_PATH / "bert_training.log",
-        "topk_evaluation": LOGS_PATH / "topk_evaluation.log",
-        "evaluation": LOGS_PATH / "evaluation.log",
-        "visualization": LOGS_PATH / "visualization.log"
-    },
-    "max_file_size": 10 * 1024 * 1024,  # 10 MB
-    "backup_count": 5                   # Keep up to 5 rotated logs
+    'callbacks': {
+        'early_stopping': {
+            'monitor': 'val_accuracy',
+            'patience': 3,
+            'restore_best_weights': True
+        },
+        'model_checkpoint': {
+            'monitor': 'val_accuracy',
+            'save_best_only': True,
+            'save_weights_only': False
+        },
+        'reduce_lr': {
+            'monitor': 'val_loss',
+            'factor': 0.5,
+            'patience': 2,
+            'min_lr': 1e-6
+        }
+    }
 }
+
+# BERT Models configuration
+BERT_CONFIG = {
+    'available_models': {
+        'roberta_base': 'roberta-base',
+        'roberta_large': 'roberta-large'
+    },
+    'model_name': 'roberta-base',  # Default model
+    'max_length': 512,
+    'num_train_epochs': 3,
+    'eval_strategy': 'epoch',
+    'logging_strategy': 'epoch',
+    'logging_steps': 100,
+    'save_strategy': 'epoch',
+    'load_best_model_at_end': True,
+    'metric_for_best_model': 'eval_accuracy',
+    'greater_is_better': True,
+    'seed': RANDOM_SEED,
+    'learning_rate': 2e-5,
+    'weight_decay': 0.01,
+    'warmup_steps': 500,
+    'batch_sizes': {
+        'roberta-base': {
+            'train_batch_size': 16,
+            'eval_batch_size': 32
+        },
+        'roberta-large': {
+            'train_batch_size': 8,
+            'eval_batch_size': 16
+        }
+    }
+}
+
+# DeepSeek Models configuration
+DEEPSEEK_CONFIG = {
+    'available_models': {
+        'deepseek_7b_base': 'deepseek-ai/deepseek-llm-7b-base'
+    },
+    'model_name': 'deepseek-ai/deepseek-llm-7b-base',  # Default model
+    'trust_remote_code': True,
+    'max_length': 512,
+    'padding': 'max_length',
+    'truncation': True,
+    'num_train_epochs': 3,
+    'eval_strategy': 'epoch',
+    'per_device_train_batch_size': 4,
+    'per_device_eval_batch_size': 8,
+    'gradient_accumulation_steps': 4,
+    'logging_steps': 100,
+    'save_strategy': 'epoch',
+    'save_total_limit': 2,
+    'load_best_model_at_end': True,
+    'metric_for_best_model': 'eval_accuracy',
+    'greater_is_better': True,
+    'random_state': RANDOM_SEED,
+    'learning_rate': 1e-4,
+    'gradient_checkpointing': True,
+    'quantization': {
+        'load_in_4bit': True,
+        'bnb_4bit_use_double_quant': True,
+        'bnb_4bit_quant_type': 'nf4',
+        'bnb_4bit_compute_dtype': 'float16'
+    },
+    'lora': {
+        'task_type': 'SEQ_CLS',
+        'r': 16,
+        'lora_alpha': 32,
+        'lora_dropout': 0.1,
+        'bias': 'none'
+    },
+    'text_preprocessing': {
+        'clean_text': True
+    },
+    'batch_sizes': {
+        'deepseek-ai/deepseek-llm-7b-base': {
+            'train_batch_size': 4,
+            'eval_batch_size': 8
+        }
+    }
+}
+
+# Feature extraction configuration
+FEATURE_EXTRACTION_CONFIG = {
+    'tfidf': {
+        'max_features': 10000,
+        'ngram_range': (1, 2),
+        'stop_words': 'english'
+    },
+    'sbert': {
+        'model_name': 'all-MiniLM-L6-v2'
+    }
+}
+
+def create_all_directories():
+    """Create all necessary directories"""
+    directories = [
+        DATA_PATH / "raw",
+        DATA_PATH / "processed", 
+        DATA_PATH / "splits",
+        DATA_PATH / "features" / "tfidf",
+        DATA_PATH / "features" / "sbert",
+        DATA_PATH / "analysis",
+        MODELS_PATH / "saved_models" / "ml_models",
+        MODELS_PATH / "saved_models" / "dl_models",
+        MODELS_PATH / "saved_models" / "bert_models", 
+        MODELS_PATH / "saved_models" / "deepseek_models",
+        RESULTS_PATH / "ml" / "comparisons",
+        RESULTS_PATH / "dl" / "comparisons",
+        RESULTS_PATH / "bert" / "comparisons",
+        RESULTS_PATH / "deepseek" / "comparisons",
+        RESULTS_PATH / "overall",
+        LOGS_PATH
+    ]
+    
+    # Create category-specific directories
+    for n_categories in CATEGORY_SIZES:
+        directories.extend([
+            RESULTS_PATH / "ml" / f"top_{n_categories}_categories",
+            RESULTS_PATH / "dl" / f"top_{n_categories}_categories", 
+            RESULTS_PATH / "bert" / f"top_{n_categories}_categories",
+            RESULTS_PATH / "deepseek" / f"top_{n_categories}_categories"
+        ])
+    
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Created {len(directories)} directories")
+
+if __name__ == "__main__":
+    create_all_directories()
+    print("Configuration initialized and directories created.")

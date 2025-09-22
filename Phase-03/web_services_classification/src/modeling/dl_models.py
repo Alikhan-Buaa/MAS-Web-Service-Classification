@@ -1,6 +1,6 @@
 """
 Enhanced Deep Learning Models for Web Service Classification
-Uses common evaluation functionality from evaluate.py
+Enhanced with standardized naming and proper result handling
 """
 
 import pandas as pd
@@ -9,6 +9,7 @@ import logging
 import json
 import time
 import traceback
+import pickle
 from pathlib import Path
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -19,13 +20,14 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLRO
 from tensorflow.keras.utils import to_categorical
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 
-# Import configuration
+# Import configuration and utilities
 from src.config import (
     CATEGORY_SIZES, SAVED_MODELS_CONFIG, DL_CONFIG, 
     PREPROCESSING_CONFIG, RANDOM_SEED, RESULTS_CONFIG
 )
 from src.preprocessing.feature_extraction import FeatureExtractor
-from src.evaluation.evaluate import ModelEvaluator  # Import common evaluator
+from src.evaluation.evaluate import ModelEvaluator
+from src.utils.utils import FileNamingStandard
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -36,18 +38,16 @@ tf.random.set_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
 class DLModelTrainer:
-    """Main class for training deep learning models"""
+    """Enhanced DL model trainer with standardized naming"""
     
     @staticmethod
     def make_json_serializable(obj):
         """Convert numpy types and Path objects to native Python types for JSON serialization"""
-        from pathlib import Path
-        
         if isinstance(obj, dict):
             return {key: DLModelTrainer.make_json_serializable(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [DLModelTrainer.make_json_serializable(item) for item in obj]
-        elif isinstance(obj, (Path, type(Path()))):  # Add this line to handle Path objects
+        elif isinstance(obj, (Path, type(Path()))):
             return str(obj)
         elif isinstance(obj, np.integer):
             return int(obj)
@@ -65,7 +65,7 @@ class DLModelTrainer:
         self.feature_extractor = FeatureExtractor()
         self.config = DL_CONFIG['bilstm']
         self.callbacks_config = DL_CONFIG['callbacks']
-        self.evaluator = ModelEvaluator()  # Use common evaluator
+        self.evaluator = ModelEvaluator()
         
         # Configure GPU memory growth
         self._configure_gpu()
@@ -212,7 +212,7 @@ class DLModelTrainer:
             raise
     
     def plot_training_history(self, history, model_name, n_categories, feature_type):
-        """Create training history plots for accuracy and loss"""
+        """Create training history plots with standardized naming"""
         try:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
             
@@ -236,10 +236,16 @@ class DLModelTrainer:
             
             plt.tight_layout()
             
-            # Save plot
+            # Save plot with standardized naming
             plot_dir = RESULTS_CONFIG['dl_category_paths'][n_categories]
             plot_dir.mkdir(parents=True, exist_ok=True)
-            plot_file = plot_dir / f'{model_name}_{feature_type}_top_{n_categories}_categories_history.png'
+            
+            # Use standardized filename
+            filename = FileNamingStandard.generate_training_history_filename(model_name, n_categories)
+            # Modify to include feature type in the filename
+            filename = filename.replace('.png', f'_{feature_type}.png')
+            plot_file = plot_dir / filename
+            
             plt.savefig(plot_file, dpi=300, bbox_inches='tight')
             plt.close()
             
@@ -286,8 +292,12 @@ class DLModelTrainer:
             cm = confusion_matrix(y_true, y_pred)
             
             # Create visualizations using common evaluator
-            cm_plot_path = self.evaluator.generate_confusion_heatmap(cm, class_labels, model_name, n_categories, feature_type, "dl")
-            report_path = self.evaluator.generate_classification_report_csv(y_true, y_pred, class_labels, model_name, n_categories, feature_type, "dl")
+            cm_plot_path = self.evaluator.generate_confusion_heatmap(
+                cm, class_labels, model_name, n_categories, feature_type, "dl"
+            )
+            report_path = self.evaluator.generate_classification_report_csv(
+                y_true, y_pred, class_labels, model_name, n_categories, feature_type, "dl"
+            )
             
             # Compile results
             results = {
@@ -329,7 +339,7 @@ class DLModelTrainer:
             
             tf.keras.backend.clear_session()
             
-            # Load datasets using correct config paths
+            # Load datasets
             splits_dir = Path(PREPROCESSING_CONFIG["splits"].format(n=n_categories))
             if not splits_dir.exists():
                 raise FileNotFoundError(f"Splits directory not found: {splits_dir}")
@@ -340,7 +350,7 @@ class DLModelTrainer:
             
             logger.info(f"Loaded datasets - Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
             
-            # Load class labels using common evaluator
+            # Load class labels
             class_labels = self.evaluator.load_class_labels(n_categories)
             
             # Get features
@@ -381,7 +391,10 @@ class DLModelTrainer:
             model_dir = SAVED_MODELS_CONFIG['dl_models_path'] / f'top_{n_categories}_categories'
             model_dir.mkdir(parents=True, exist_ok=True)
             
-            model_filename = f'BiLSTM_{feature_type}_top_{n_categories}_categories.h5'
+            # Use standardized filename for model
+            model_filename = FileNamingStandard.generate_model_filename(
+                'BiLSTM', feature_type, n_categories, 'h5'
+            )
             model_path = model_dir / model_filename
             
             callbacks = [
@@ -407,7 +420,7 @@ class DLModelTrainer:
                 )
             ]
             
-            # Training parameters from config
+            # Training parameters
             batch_size = min(self.config['batch_size'], len(X_train) // 10, 32)
             epochs = self.config['epochs']
             
@@ -448,7 +461,13 @@ class DLModelTrainer:
             
             # Save training history as JSON
             history_dir = RESULTS_CONFIG['dl_category_paths'][n_categories]
-            history_json_file = history_dir / f'{model_name}_{feature_type}_top_{n_categories}_categories_history.json'
+            # Save training history as JSON
+            history_dir = RESULTS_CONFIG['dl_category_paths'][n_categories]
+            history_json_filename = FileNamingStandard.generate_training_history_filename(
+                model_name, n_categories, 'json'
+            ).replace('.json', f'_{feature_type}.json')
+            history_json_file = history_dir / history_json_filename
+            
             with open(history_json_file, 'w') as f:
                 json.dump(history_dict, f, indent=2)
             
@@ -460,6 +479,7 @@ class DLModelTrainer:
             eval_results['training_history'] = history_dict
             eval_results['training_history_plot'] = history_plot_path
             eval_results['training_history_json'] = str(history_json_file)
+            eval_results['model_path'] = str(model_path)
             
             # Print metrics using common evaluator
             self.evaluator.print_model_metrics(eval_results, model_name, n_categories, feature_type, training_time, "DL")
@@ -474,6 +494,42 @@ class DLModelTrainer:
         except Exception as e:
             logger.error(f"Error training DL model for {n_categories} categories with {feature_type}: {str(e)}")
             raise
+    
+    def save_results_for_overall_analysis(self, all_results):
+        """Save results in the format expected by OverallPerformanceAnalyzer"""
+        try:
+            comparisons_path = RESULTS_CONFIG['dl_comparisons_path']
+            comparisons_path.mkdir(parents=True, exist_ok=True)
+            
+            # Transform results into the format expected by OverallPerformanceAnalyzer
+            formatted_results = {}
+            
+            for feature_type, feature_results in all_results.items():
+                for n_categories, result in feature_results.items():
+                    if n_categories not in formatted_results:
+                        formatted_results[n_categories] = {}
+                    
+                    # Create a key that matches the expected format
+                    model_name = result.get('model_name', 'BiLSTM')
+                    clean_model_name = FileNamingStandard.standardize_model_name(model_name)
+                    result_key = f"{clean_model_name}_{feature_type}"
+                    formatted_results[n_categories][result_key] = result
+            
+            # Save as pickle file
+            pickle_file = comparisons_path / "dl_final_results.pkl"
+            with open(pickle_file, 'wb') as f:
+                pickle.dump(formatted_results, f)
+            
+            logger.info(f"DL results saved for overall analysis: {pickle_file}")
+            
+            # Also save JSON for debugging
+            json_file = comparisons_path / "dl_final_results.json"
+            with open(json_file, 'w') as f:
+                json_safe_results = self.make_json_serializable(formatted_results)
+                json.dump(json_safe_results, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Error saving DL results for overall analysis: {e}")
     
     def train_all_categories(self, feature_types=None):
         """Train models on all category sizes with specified feature types"""
@@ -505,21 +561,22 @@ class DLModelTrainer:
                     results = self.train_model_on_category(n_categories, feature_type)
                     all_results[feature_type][n_categories] = results
                     
-                    # Save individual results using config paths
+                    # Save individual results
                     category_dir = SAVED_MODELS_CONFIG['dl_models_path'] / f'top_{n_categories}_categories'
                     category_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # Save as JSON
-                    results_json = category_dir / f'dl_results_{feature_type}.json'
+                    # Save as JSON with standardized naming
+                    results_filename = f'dl_results_{feature_type}.json'
+                    results_json = category_dir / results_filename
                     with open(results_json, 'w') as f:
                         json_safe_results = self.make_json_serializable(results)
                         json.dump(json_safe_results, f, indent=2)
                     
-                    logger.info(f" Results saved to {results_json}")
-                    logger.info(f" Training completed successfully for {n_categories} categories")
+                    logger.info(f"Results saved to {results_json}")
+                    logger.info(f"Training completed successfully for {n_categories} categories")
                 
                 except Exception as e:
-                    logger.error(f" Error training for {n_categories} categories: {str(e)}")
+                    logger.error(f"Error training for {n_categories} categories: {str(e)}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")
                     continue
                 
@@ -530,13 +587,15 @@ class DLModelTrainer:
         print(f"DL MODEL TRAINING PIPELINE COMPLETED")
         print(f"{'='*80}")
         
-        # Print summary of saved data
-        print(f"\nDL Final Results Summary:")
-        print(f"  File location: {SAVED_MODELS_CONFIG['dl_models_path']}/dl_final_results.pkl")
-        print(f"  Categories processed: {list(self.evaluator.final_results.keys())}")
-        print(f"  Total model entries: {sum(len(models) for models in self.evaluator.final_results.values())}")
+        # Save results for overall analysis
+        self.save_results_for_overall_analysis(all_results)
         
-        # Automatically generate all visualizations
+        # Print summary
+        print(f"\nDL Final Results Summary:")
+        print(f"  Pickle file: {RESULTS_CONFIG['dl_comparisons_path']}/dl_final_results.pkl")
+        print(f"  Categories processed: {list(all_results[list(all_results.keys())[0]].keys()) if all_results else []}")
+        
+        # Generate visualizations
         print(f"\n{'='*80}")
         print(f"GENERATING DL VISUALIZATIONS")
         print(f"{'='*80}")
@@ -553,22 +612,15 @@ class DLModelTrainer:
         return all_results
     
     def plot_dl_results_only(self):
-        """Convenience function to plot DL results with config paths"""
+        """Generate DL comparison plots"""
         results_file_path = RESULTS_CONFIG["dl_comparisons_path"] / "dl_final_results.pkl"
         charts_dir = RESULTS_CONFIG["dl_comparisons_path"] / "charts"
-        
         self.evaluator.plot_results_comparison(results_file_path, charts_dir, "dl")
     
-    def plot_dl_results_with_radar(self, show_plots=False):
-        """Generate comprehensive DL plots including radar charts"""
-        results_file_path = RESULTS_CONFIG["dl_comparisons_path"] / "dl_final_results.pkl"
-        charts_dir = RESULTS_CONFIG["dl_comparisons_path"] / "charts"
-        
-        self.evaluator.plot_results_with_radar(results_file_path, charts_dir, "dl", show_plots)
-    
     def generate_dl_radar_plots_only(self, show_plots=False):
-        """Generate only radar plots for DL models"""
+        """Generate DL radar plots"""
         self.evaluator.generate_radar_plots("dl", show_plots)
+
 
 def main():
     """Main function to run comprehensive DL model training and analysis"""
@@ -582,6 +634,7 @@ def main():
         json_safe_results = trainer.make_json_serializable(results)
         json.dump(json_safe_results, f, indent=2)
     logger.info(f"Results saved to {out_file}")
+
 
 if __name__ == "__main__":
     main()

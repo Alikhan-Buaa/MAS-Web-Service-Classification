@@ -1,19 +1,21 @@
 """
-Web Services Classification Project - Main Entry Point
-Run all phases of the classification pipeline
+Web Services Classification Project - Enhanced Main Entry Point
+Run all phases of the classification pipeline with improved logging and result storage
 """
 
 import argparse
 import logging
 import sys
+import json
+import time
+from datetime import datetime
 from pathlib import Path
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from src.config import (
-    CATEGORY_SIZES, LOGGING_CONFIG
-    #print_config_summary #validate_config
+    CATEGORY_SIZES, LOGGING_CONFIG, RESULTS_CONFIG
 )
 from src.preprocessing.data_analysis import DataAnalyzer
 from src.preprocessing.data_preprocessing import DataPreprocessor
@@ -22,205 +24,470 @@ from src.modeling.ml_models import MLModelTrainer
 from src.modeling.dl_models import DLModelTrainer
 from src.evaluation.evaluate import ModelEvaluator
 from src.evaluation.overall_comparison import OverallPerformanceAnalyzer
-from src.modeling.bert_models import  RoBERTaModelTrainer
-from src.modeling.deepseek_models import  DeepSeekModelTrainer
-#from src.evaluation.benchmark_generator import BenchmarkGenerator
-from src.utils.utils import setup_logging
+from src.modeling.bert_models import RoBERTaModelTrainer
+from src.modeling.deepseek_models import DeepSeekModelTrainer
+from src.utils.utils import setup_logging, get_timestamp
 
 
-def setup_project_logging():
-    """Setup logging for the entire project"""
-    setup_logging(
-        log_file=LOGGING_CONFIG['log_files']['data_analysis'],
-        level=LOGGING_CONFIG['level'],
-        format_str=LOGGING_CONFIG['format']
-    )
-
-def run_data_analysis_phase():
-    """Run data analysis phase"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting Data Analysis Phase")
+class PipelineManager:
+    """Enhanced pipeline manager with comprehensive logging and result tracking"""
     
-    analyzer = DataAnalyzer()
-    
-    # Perform data analysis
-    results = analyzer.run_complete_analysis() 
-    logger.info("Data Analysis Phase completed")
-    return results
-
-
-def run_preprocessing_phase():
-    """Run preprocessing Phase"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting Preprocessing Phase")
-    
-    preprocessor = DataPreprocessor()
-    results = preprocessor.process_all_categories()
+    def __init__(self):
+        self.results = {}
+        self.execution_log = {
+            'start_time': datetime.now().isoformat(),
+            'phases_completed': [],
+            'phases_failed': [],
+            'total_execution_time': 0,
+            'phase_timings': {}
+        }
+        self.logger = None
         
-    logger.info("Data preprocessing completed successfully!")
-    return results   
-
-
-def run_feature_extraction_phase(categories=None, feature_types=None):
-    """Run feature extraction"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting feature extraction...")
+    def setup_project_logging(self, phase_name="main"):
+        """Setup enhanced logging for the entire project"""
+        log_file = LOGGING_CONFIG['log_files'].get(phase_name, LOGGING_CONFIG['log_files']['data_analysis'])
         
-    if feature_types is None:
-        feature_types = ['tfidf', 'sbert']
+        setup_logging(
+            log_file=log_file,
+            level=LOGGING_CONFIG['level'],
+            format_str=LOGGING_CONFIG['format']
+        )
         
-    extractor = FeatureExtractor()
-    results = extractor.extract_features_all_categories(feature_types)
-           
-    logger.info("Feature extraction completed successfully!")
-    return results
+        self.logger = logging.getLogger(__name__)
+        self.logger.info(f"Pipeline Manager initialized for phase: {phase_name}")
+    
+    def log_phase_start(self, phase_name):
+        """Log the start of a pipeline phase"""
+        self.logger.info(f"{'='*80}")
+        self.logger.info(f"STARTING PHASE: {phase_name.upper()}")
+        self.logger.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.logger.info(f"{'='*80}")
+        return time.time()
+    
+    def log_phase_end(self, phase_name, start_time, success=True, error=None):
+        """Log the end of a pipeline phase"""
+        duration = time.time() - start_time
+        self.execution_log['phase_timings'][phase_name] = duration
         
-
-def run_ml_training_phase():
-    """Run ML model training phase with automatic visualization"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting ML Training Phase")
-    
-    ml_trainer = MLModelTrainer()
-    
-    # Train all ML models for all category sizes (includes automatic visualization)
-    results = ml_trainer.train_all_categories()
-    
-    logger.info("ML Training Phase completed (with visualizations)")
-    return results
-
-def run_dl_training_phase():
-    """Run DL model training phase with automatic visualization"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting DL Training Phase")
-    
-    dl_trainer = DLModelTrainer()
-    
-    # Train all DL models for all category sizes (includes automatic visualization)
-    results = dl_trainer.train_all_categories()
-    
-    logger.info("DL Training Phase completed (with visualizations)")
-    return results
-
-def run_bert_training_phase():
-    """Run BERT model training phase with automatic visualization"""
-    logger = logging.getLogger(__name__)
-    bert_trainer = RoBERTaModelTrainer()
-    results = bert_trainer.train_all_categories()
-    logger.info("BERT Training Phase completed (with visualizations)")
-    return results
-
-def run_deepseek_training_phase():
-    """Run Deepseek model training phase with automatic visualization"""
-    logger = logging.getLogger(__name__)
-    trainer  = DeepSeekModelTrainer()
-    results = trainer.train_deepseek_models()
-    logger.info("Deepseek Training Phase completed (with visualizations)")
-    return results
-
-def run_evaluation_phase():
-    """Run comprehensive model evaluation and comparison phase"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting Evaluation Phase")
-    
-    evaluator = ModelEvaluator()
-    
-    try:
-        # Generate ML model analysis
-        logger.info("Generating ML model analysis...")
-        from src.config import RESULTS_CONFIG
-        ml_results_file = RESULTS_CONFIG["ml_comparisons_path"] / "ml_final_results.pkl"
-        ml_charts_dir = RESULTS_CONFIG["ml_comparisons_path"] / "charts"
-        
-        if ml_results_file.exists():
-            evaluator.plot_results_comparison(ml_results_file, ml_charts_dir, "ml")
-            evaluator.generate_radar_plots("ml")
-            logger.info("ML model analysis completed")
+        if success:
+            self.execution_log['phases_completed'].append(phase_name)
+            self.logger.info(f"PHASE COMPLETED: {phase_name.upper()} ({duration:.2f}s)")
         else:
-            logger.warning("ML results file not found, skipping ML analysis")
+            self.execution_log['phases_failed'].append({
+                'phase': phase_name,
+                'error': str(error),
+                'duration': duration
+            })
+            self.logger.error(f"PHASE FAILED: {phase_name.upper()} after {duration:.2f}s - {error}")
         
-        # Generate DL model analysis
-        logger.info("Generating DL model analysis...")
-        dl_results_file = RESULTS_CONFIG["dl_comparisons_path"] / "dl_final_results.pkl"
-        dl_charts_dir = RESULTS_CONFIG["dl_comparisons_path"] / "charts"
-        
-        if dl_results_file.exists():
-            evaluator.plot_results_comparison(dl_results_file, dl_charts_dir, "dl")
-            evaluator.generate_radar_plots("dl")
-            logger.info("DL model analysis completed")
-        else:
-            logger.warning("DL results file not found, skipping DL analysis")
-        
-        # Generate BERT model analysis
-        logger.info("Generating BERT model analysis...")
-        bert_results_file = RESULTS_CONFIG["bert_comparisons_path"] / "bert_final_results.pkl"
-        bert_charts_dir = RESULTS_CONFIG["bert_comparisons_path"] / "charts"
-        
-        if bert_results_file.exists():
-            evaluator.plot_results_comparison(bert_results_file, bert_charts_dir, "bert")
-            evaluator.generate_radar_plots("bert")
-            logger.info("BERT model analysis completed")
-        else:
-            logger.warning("BERT results file not found, skipping BERT analysis")
-        
-        # Generate DeepSeek model analysis
-        logger.info("Generating DeepSeek model analysis...")
-        deepseek_results_file = RESULTS_CONFIG["deepseek_comparisons_path"] / "deepseek_final_results.pkl"
-        deepseek_charts_dir = RESULTS_CONFIG["deepseek_comparisons_path"] / "charts"
-        
-        if deepseek_results_file.exists():
-            evaluator.plot_results_comparison(deepseek_results_file, deepseek_charts_dir, "deepseek")
-            evaluator.generate_radar_plots("deepseek")
-            logger.info("DeepSeek model analysis completed")
-        else:
-            logger.warning("DeepSeek results file not found, skipping DeepSeek analysis")
+        self.logger.info(f"{'='*80}")
+        return duration
+    
+    def save_execution_summary(self):
+        """Save comprehensive execution summary"""
+        try:
+            self.execution_log['end_time'] = datetime.now().isoformat()
+            self.execution_log['total_execution_time'] = sum(self.execution_log['phase_timings'].values())
             
-    except Exception as e:
-        logger.error(f"Error in evaluation phase: {e}")
-        print(f"Warning: Some evaluation steps may have failed: {e}")
+            # Save execution log
+            log_file = RESULTS_CONFIG['overall_results_path'] / f"pipeline_execution_{get_timestamp()}.json"
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(log_file, 'w') as f:
+                json.dump(self.execution_log, f, indent=2)
+            
+            # Save results summary
+            if self.results:
+                results_file = RESULTS_CONFIG['overall_results_path'] / f"pipeline_results_{get_timestamp()}.json"
+                with open(results_file, 'w') as f:
+                    json.dump(self.results, f, indent=2)
+            
+            self.logger.info(f"Execution summary saved to: {log_file}")
+            self.logger.info(f"Results summary saved to: {results_file}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to save execution summary: {e}")
     
-    logger.info("Evaluation Phase completed")
-
-def run_visualize_phase():
-    """Run overall performance visualization phase (ML vs DL comparisons)"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting Overall Performance Visualization Phase")
-    
-    try:
-        analyzer = OverallPerformanceAnalyzer()
-        analyzer.generate_all_comparisons()
+    def run_data_analysis_phase(self):
+        """Run data analysis phase with enhanced logging"""
+        phase_name = "data_analysis"
+        start_time = self.log_phase_start(phase_name)
         
-        logger.info("Overall Performance Visualization Phase completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in overall visualization phase: {e}")
-        print(f"Warning: Overall visualization phase encountered errors: {e}")
-    
-    logger.info("Overall Performance Visualization Phase completed")
+        try:
+            analyzer = DataAnalyzer()
+            results = analyzer.run_complete_analysis()
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': 'Data analysis completed successfully',
+                'outputs': results if results else 'Analysis completed without specific outputs'
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
 
-def run_benchmark_generation_phase():
-    """Run benchmark generation phase"""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting Benchmark Generation Phase")
-    
-    # TODO: Implement benchmark generation
-    print("Benchmark generation phase - to be implemented")
-    print("This will generate:")
-    print("- Performance benchmarks across all models")
-    print("- Comparison tables and reports")
-    print("- Model ranking and recommendations")
-    
-    logger.info("Benchmark Generation Phase completed")
+    def run_preprocessing_phase(self):
+        """Run preprocessing phase with enhanced logging"""
+        phase_name = "preprocessing"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            preprocessor = DataPreprocessor()
+            results = preprocessor.process_all_categories()
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Preprocessed data for {len(CATEGORY_SIZES)} category sizes',
+                'categories_processed': CATEGORY_SIZES,
+                'outputs': results if results else 'Preprocessing completed'
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_feature_extraction_phase(self, categories=None, feature_types=None):
+        """Run feature extraction with enhanced logging"""
+        phase_name = "feature_extraction"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            if feature_types is None:
+                feature_types = ['tfidf', 'sbert']
+            
+            extractor = FeatureExtractor()
+            results = extractor.extract_features_all_categories(feature_types)
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Extracted {len(feature_types)} feature types for {len(CATEGORY_SIZES)} categories',
+                'feature_types': feature_types,
+                'categories_processed': CATEGORY_SIZES,
+                'outputs': results if results else 'Feature extraction completed'
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_ml_training_phase(self):
+        """Run ML model training phase with enhanced logging"""
+        phase_name = "ml_training"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            ml_trainer = MLModelTrainer()
+            results = ml_trainer.train_all_categories()
+            
+            # Extract summary statistics
+            models_trained = []
+            total_models = 0
+            for feature_type, feature_results in results.items():
+                for category, model_results in feature_results.items():
+                    total_models += len(model_results)
+                    models_trained.extend(list(model_results.keys()))
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Trained {total_models} ML models across {len(set(models_trained))} model types',
+                'models_trained': list(set(models_trained)),
+                'feature_types': list(results.keys()) if results else [],
+                'categories_processed': CATEGORY_SIZES,
+                'pickle_file': str(RESULTS_CONFIG["ml_comparisons_path"] / "ml_final_results.pkl")
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_dl_training_phase(self):
+        """Run DL model training phase with enhanced logging"""
+        phase_name = "dl_training"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            dl_trainer = DLModelTrainer()
+            results = dl_trainer.train_all_categories()
+            
+            # Extract summary statistics
+            models_trained = []
+            total_models = 0
+            for feature_type, feature_results in results.items():
+                total_models += len(feature_results)
+                models_trained.append(f"BiLSTM_{feature_type}")
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Trained {total_models} DL models (BiLSTM) with different feature types',
+                'models_trained': models_trained,
+                'feature_types': list(results.keys()) if results else [],
+                'categories_processed': CATEGORY_SIZES,
+                'pickle_file': str(RESULTS_CONFIG["dl_comparisons_path"] / "dl_final_results.pkl")
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_bert_training_phase(self):
+        """Run BERT model training phase with enhanced logging"""
+        phase_name = "bert_training"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            bert_trainer = RoBERTaModelTrainer()
+            results = bert_trainer.train_all_categories()
+            
+            # Extract summary statistics
+            models_trained = []
+            total_models = 0
+            for model_key, model_results in results.items():
+                total_models += len(model_results)
+                models_trained.append(model_key)
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Trained {total_models} BERT/RoBERTa models',
+                'models_trained': models_trained,
+                'categories_processed': CATEGORY_SIZES,
+                'pickle_file': str(RESULTS_CONFIG["bert_comparisons_path"] / "bert_final_results.pkl")
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_deepseek_training_phase(self):
+        """Run DeepSeek model training phase with enhanced logging"""
+        phase_name = "deepseek_training"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            trainer = DeepSeekModelTrainer()
+            results = trainer.train_deepseek_models()
+            
+            # Extract summary statistics
+            models_trained = []
+            total_models = 0
+            for model_key, model_results in results.items():
+                total_models += len(model_results)
+                models_trained.append(model_key)
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Trained {total_models} DeepSeek models',
+                'models_trained': models_trained,
+                'categories_processed': CATEGORY_SIZES,
+                'pickle_file': str(RESULTS_CONFIG["deepseek_comparisons_path"] / "deepseek_final_results.pkl")
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_evaluation_phase(self):
+        """Run comprehensive model evaluation and comparison phase with enhanced logging"""
+        phase_name = "evaluation"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            evaluator = ModelEvaluator()
+            evaluation_results = {
+                'ml_analysis': False,
+                'dl_analysis': False,
+                'bert_analysis': False,
+                'deepseek_analysis': False
+            }
+            
+            # Check and process each model type
+            model_types = [
+                ('ml', RESULTS_CONFIG["ml_comparisons_path"]),
+                ('dl', RESULTS_CONFIG["dl_comparisons_path"]),
+                ('bert', RESULTS_CONFIG["bert_comparisons_path"]),
+                ('deepseek', RESULTS_CONFIG["deepseek_comparisons_path"])
+            ]
+            
+            for model_type, comparisons_path in model_types:
+                try:
+                    self.logger.info(f"Generating {model_type.upper()} model analysis...")
+                    results_file = comparisons_path / f"{model_type}_final_results.pkl"
+                    charts_dir = comparisons_path / "charts"
+                    
+                    if results_file.exists():
+                        evaluator.plot_results_comparison(results_file, charts_dir, model_type)
+                        evaluator.generate_radar_plots(model_type)
+                        evaluation_results[f'{model_type}_analysis'] = True
+                        self.logger.info(f"{model_type.upper()} model analysis completed")
+                    else:
+                        self.logger.warning(f"{model_type.upper()} results file not found: {results_file}")
+                        
+                except Exception as e:
+                    self.logger.error(f"Error in {model_type.upper()} analysis: {e}")
+                    evaluation_results[f'{model_type}_analysis'] = f"Failed: {str(e)}"
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Evaluation completed for available models',
+                'analysis_results': evaluation_results,
+                'charts_generated': True
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return evaluation_results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_visualize_phase(self):
+        """Run overall performance visualization phase with enhanced logging"""
+        phase_name = "overall_visualization"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            analyzer = OverallPerformanceAnalyzer()
+            analyzer.generate_all_comparisons()
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': 'Overall performance visualization completed',
+                'output_location': str(RESULTS_CONFIG['overall_results_path'])
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return True
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_benchmark_generation_phase(self):
+        """Run benchmark generation phase with enhanced logging"""
+        phase_name = "benchmark_generation"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            # TODO: Implement benchmark generation
+            self.logger.info("Benchmark generation phase - to be implemented")
+            self.logger.info("Will generate:")
+            self.logger.info("- Performance benchmarks across all models")
+            self.logger.info("- Comparison tables and reports")
+            self.logger.info("- Model ranking and recommendations")
+            
+            self.results[phase_name] = {
+                'status': 'pending_implementation',
+                'summary': 'Benchmark generation phase placeholder'
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return True
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def print_final_summary(self):
+        """Print comprehensive pipeline execution summary"""
+        print(f"\n{'='*100}")
+        print(f"PIPELINE EXECUTION SUMMARY")
+        print(f"{'='*100}")
+        
+        print(f"Start Time: {self.execution_log['start_time']}")
+        print(f"Total Execution Time: {self.execution_log['total_execution_time']:.2f} seconds")
+        print(f"Phases Completed: {len(self.execution_log['phases_completed'])}")
+        print(f"Phases Failed: {len(self.execution_log['phases_failed'])}")
+        
+        if self.execution_log['phases_completed']:
+            print(f"\nSUCCESSFUL PHASES:")
+            for phase in self.execution_log['phases_completed']:
+                duration = self.execution_log['phase_timings'].get(phase, 0)
+                print(f"  ✓ {phase}: {duration:.2f}s")
+        
+        if self.execution_log['phases_failed']:
+            print(f"\nFAILED PHASES:")
+            for failure in self.execution_log['phases_failed']:
+                print(f"  ✗ {failure['phase']}: {failure['error']}")
+        
+        print(f"\nRESULTS LOCATIONS:")
+        print(f"  - ML results: results/ml/comparisons/")
+        print(f"  - DL results: results/dl/comparisons/")
+        print(f"  - BERT results: results/bert/comparisons/")
+        print(f"  - DeepSeek results: results/deepseek/comparisons/")
+        print(f"  - Overall results: results/overall/")
+        print(f"  - Individual category results: results/*/top_*_categories/")
+        
+        print(f"{'='*100}")
 
 
 def main():
-    """Main function to run the entire pipeline"""
+    """Enhanced main function with comprehensive pipeline management"""
     parser = argparse.ArgumentParser(description="Web Services Classification Pipeline")
     parser.add_argument(
         "--phase", 
         choices=[
             "all", "analysis", "preprocessing", "features", "ml_training", 
-            "dl_training", "bert_training", "deepseek_training","evaluation", "visualize", "benchmarks"
+            "dl_training", "bert_training", "deepseek_training", "evaluation", "visualize", "benchmarks"
         ],
         default="all",
         help="Which phase to run"
@@ -230,74 +497,66 @@ def main():
     
     args = parser.parse_args()
     
-    # Setup logging
-    setup_project_logging()
+    # Initialize pipeline manager
+    pipeline = PipelineManager()
+    pipeline.setup_project_logging("main")
     
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    logger = logging.getLogger(__name__)
-    
     try:
-        # Validate configuration
-        #validate_config()
-        #print_config_summary()
-        
-        logger.info("Starting Web Services Classification Pipeline")
-        logger.info(f"Phase: {args.phase}")
+        pipeline.logger.info("Starting Web Services Classification Pipeline")
+        pipeline.logger.info(f"Phase: {args.phase}")
         
         # Override category sizes if specified
         if args.categories:
             global CATEGORY_SIZES
             CATEGORY_SIZES = args.categories
-            logger.info(f"Using custom category sizes: {CATEGORY_SIZES}")
+            pipeline.logger.info(f"Using custom category sizes: {CATEGORY_SIZES}")
         
         # Run specified phase(s)
         if args.phase == "all":
             print("Running complete pipeline...")
-            run_data_analysis_phase()
-            run_preprocessing_phase()
-            run_feature_extraction_phase()
-            run_ml_training_phase()
-            run_dl_training_phase()
-            run_bert_training_phase()
-            run_deepseek_training_phase()
-            run_evaluation_phase()
-            run_visualize_phase()
-            run_benchmark_generation_phase()
+            pipeline.run_data_analysis_phase()
+            pipeline.run_preprocessing_phase()
+            pipeline.run_feature_extraction_phase()
+            pipeline.run_ml_training_phase()
+            pipeline.run_dl_training_phase()
+            pipeline.run_bert_training_phase()
+            pipeline.run_deepseek_training_phase()
+            pipeline.run_evaluation_phase()
+            pipeline.run_visualize_phase()
+            pipeline.run_benchmark_generation_phase()
         elif args.phase == "analysis":
-            run_data_analysis_phase()
+            pipeline.run_data_analysis_phase()
         elif args.phase == "preprocessing":
-            run_preprocessing_phase()
+            pipeline.run_preprocessing_phase()
         elif args.phase == "features":
-            run_feature_extraction_phase()
+            pipeline.run_feature_extraction_phase()
         elif args.phase == "ml_training":
-            run_ml_training_phase()
+            pipeline.run_ml_training_phase()
         elif args.phase == "dl_training":
-            run_dl_training_phase()
+            pipeline.run_dl_training_phase()
         elif args.phase == "bert_training":
-            run_bert_training_phase()
+            pipeline.run_bert_training_phase()
         elif args.phase == "deepseek_training":            
-            run_deepseek_training_phase()
+            pipeline.run_deepseek_training_phase()
         elif args.phase == "evaluation":
-            run_evaluation_phase()
+            pipeline.run_evaluation_phase()
         elif args.phase == "visualize":
-            run_visualize_phase()
+            pipeline.run_visualize_phase()
         elif args.phase == "benchmarks":
-            run_benchmark_generation_phase()
+            pipeline.run_benchmark_generation_phase()
         
-        logger.info("Pipeline completed successfully")
-        print(f"\nPipeline completed successfully!")
-        print(f"Check the logs directory for detailed logs.")
-        print(f"Check the results directory for outputs:")
-        print(f"  - ML results: results/ml/comparisons/")
-        print(f"  - DL results: results/dl/comparisons/")
-        print(f"  - BERT results: results/bert/comparisons/")
-        print(f"  - Deepseek results: results/deepseek/comparisons/")
-        print(f"  - Individual category results: results/ml|dl|bert/top_X_categories/")
+        # Save execution summary and print final results
+        pipeline.save_execution_summary()
+        pipeline.print_final_summary()
+        
+        pipeline.logger.info("Pipeline completed successfully")
         
     except Exception as e:
-        logger.error(f"Pipeline failed: {str(e)}", exc_info=True)
+        pipeline.logger.error(f"Pipeline failed: {str(e)}", exc_info=True)
+        pipeline.save_execution_summary()  # Save summary even on failure
         print(f"Pipeline failed: {str(e)}")
         sys.exit(1)
 
