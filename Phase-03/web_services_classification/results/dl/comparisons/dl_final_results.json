@@ -1,0 +1,140 @@
+{
+  "50": {
+    "BiLSTM_tfidf": {
+      "model_name": "BiLSTM",
+      "feature_type": "tfidf",
+      "n_categories": 50,
+      "top1_accuracy": 0.7730210016155089,
+      "top3_accuracy": 0.8836833602584814,
+      "top5_accuracy": 0.9172051696284329,
+      "accuracy": 0.7730210016155089,
+      "macro_precision": 0.7946453746582156,
+      "macro_recall": 0.7814548197215125,
+      "macro_f1": 0.7856199039791789,
+      "micro_precision": 0.7730210016155089,
+      "micro_recall": 0.7730210016155089,
+      "micro_f1": 0.7730210016155089,
+      "confusion_matrix_plot": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_tfidf_top_50_categories_confusion_matrix.png",
+      "classification_report_path": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_tfidf_top_50_categories_classification_report.csv",
+      "inference_time": 0.4115869998931885,
+      "training_time": 127.5009217262268,
+      "training_history": {
+        "loss": [
+          2.683298110961914,
+          0.8009325861930847,
+          0.30350011587142944,
+          0.1273777186870575,
+          0.06533104181289673,
+          0.040178585797548294,
+          0.030858326703310013,
+          0.024071084335446358
+        ],
+        "accuracy": [
+          0.3613804280757904,
+          0.7982456088066101,
+          0.9209372401237488,
+          0.967566967010498,
+          0.9861496090888977,
+          0.9911126494407654,
+          0.9943444132804871,
+          0.9950369596481323
+        ],
+        "val_loss": [
+          1.1649196147918701,
+          0.944304883480072,
+          1.0540900230407715,
+          1.160138487815857,
+          1.1938450336456299,
+          1.2659053802490234,
+          1.277117371559143,
+          1.3053621053695679
+        ],
+        "val_accuracy": [
+          0.7180936932563782,
+          0.7600969076156616,
+          0.750403881072998,
+          0.7600969076156616,
+          0.7609046697616577,
+          0.7584814429283142,
+          0.7609046697616577,
+          0.7609046697616577
+        ]
+      },
+      "training_history_plot": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_top_50_categories_training_history_tfidf.png",
+      "training_history_json": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_top_50_categories_training_history_tfidf.json",
+      "model_path": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/models/saved_models/dl_models/top_50_categories/BiLSTM_tfidf_top_50_categories.h5"
+    },
+    "BiLSTM_sbert": {
+      "model_name": "BiLSTM",
+      "feature_type": "sbert",
+      "n_categories": 50,
+      "top1_accuracy": 0.7326332794830371,
+      "top3_accuracy": 0.8836833602584814,
+      "top5_accuracy": 0.9325525040387722,
+      "accuracy": 0.7326332794830371,
+      "macro_precision": 0.7324903088448006,
+      "macro_recall": 0.7417024156765585,
+      "macro_f1": 0.7306382989982503,
+      "micro_precision": 0.7326332794830371,
+      "micro_recall": 0.7326332794830371,
+      "micro_f1": 0.7326332794830371,
+      "confusion_matrix_plot": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_sbert_top_50_categories_confusion_matrix.png",
+      "classification_report_path": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_sbert_top_50_categories_classification_report.csv",
+      "inference_time": 0.20389914512634277,
+      "training_time": 14.761479616165161,
+      "training_history": {
+        "loss": [
+          3.219329357147217,
+          1.982617974281311,
+          1.6043235063552856,
+          1.4060958623886108,
+          1.2958022356033325,
+          1.1781507730484009,
+          1.1358106136322021,
+          1.0363459587097168,
+          0.9930489659309387,
+          0.9411911368370056
+        ],
+        "accuracy": [
+          0.1870960295200348,
+          0.45925670862197876,
+          0.5580563545227051,
+          0.6131117343902588,
+          0.642428457736969,
+          0.6722068190574646,
+          0.6838642954826355,
+          0.7097183465957642,
+          0.7203370332717896,
+          0.7369575500488281
+        ],
+        "val_loss": [
+          1.936894416809082,
+          1.3692190647125244,
+          1.224366545677185,
+          1.1236662864685059,
+          1.0767230987548828,
+          1.0648961067199707,
+          1.0427497625350952,
+          1.0094561576843262,
+          1.0083266496658325,
+          0.9987475275993347
+        ],
+        "val_accuracy": [
+          0.5420032143592834,
+          0.6397415399551392,
+          0.6623586416244507,
+          0.6809369921684265,
+          0.6954765915870667,
+          0.710016131401062,
+          0.6978998184204102,
+          0.7140549421310425,
+          0.7172859311103821,
+          0.72294020652771
+        ]
+      },
+      "training_history_plot": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_top_50_categories_training_history_sbert.png",
+      "training_history_json": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/results/dl/top_50_categories/BiLSTM_top_50_categories_training_history_sbert.json",
+      "model_path": "/workspace/axolotl/MAS-Web-Service-Classification/Phase-03/web_services_classification/models/saved_models/dl_models/top_50_categories/BiLSTM_sbert_top_50_categories.h5"
+    }
+  }
+}

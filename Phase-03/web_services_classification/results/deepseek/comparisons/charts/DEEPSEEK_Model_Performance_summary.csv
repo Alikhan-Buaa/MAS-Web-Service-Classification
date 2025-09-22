@@ -1,0 +1,2 @@
+Categories,Model,Feature,Accuracy,F1-Score,Top-1,Top-3,Top-5
+50,deepseek_aideepseek_llm_7b_base_raw_text,raw_text,0.7936,0.7942,0.7936,0.9196,0.9564
