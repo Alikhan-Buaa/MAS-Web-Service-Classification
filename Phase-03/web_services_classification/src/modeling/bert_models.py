@@ -132,218 +132,7 @@ class RoBERTaModelTrainer:
             self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
             logger.info(f"Loaded RoBERTa tokenizer: {model_name}")
         except Exception as e:
-            return eval_results
-            
-        except Exception as e:
-            logger.error(f"Error training {model_name} for {n_categories} categories: {str(e)}")
-            raise
-    
-    def save_results_for_overall_analysis(self, all_results):
-        """Save results in the format expected by OverallPerformanceAnalyzer"""
-        try:
-            comparisons_path = RESULTS_CONFIG['bert_comparisons_path']
-            comparisons_path.mkdir(parents=True, exist_ok=True)
-            
-            # Transform results into the format expected by OverallPerformanceAnalyzer
-            formatted_results = {}
-            
-            for model_key, model_results in all_results.items():
-                for n_categories, result in model_results.items():
-                    if n_categories not in formatted_results:
-                        formatted_results[n_categories] = {}
-                    
-                    # Create a key that matches the expected format
-                    model_name = result.get('model_name', f'bert_model')
-                    feature_type = result.get('feature_type', 'raw_text')
-                    
-                    # Use consistent naming pattern
-                    clean_model_name = FileNamingStandard.standardize_model_name(model_name)
-                    result_key = f"{clean_model_name}_{feature_type}"
-                    formatted_results[n_categories][result_key] = result
-            
-            # Save as pickle file with the expected name
-            pickle_file = comparisons_path / "bert_final_results.pkl"
-            with open(pickle_file, 'wb') as f:
-                pickle.dump(formatted_results, f)
-            
-            logger.info(f"BERT results saved for overall analysis: {pickle_file}")
-            
-            # Also save JSON for debugging
-            json_file = comparisons_path / "bert_final_results.json"
-            with open(json_file, 'w') as f:
-                json_safe_results = self.make_json_serializable(formatted_results)
-                json.dump(json_safe_results, f, indent=2)
-            
-        except Exception as e:
-            logger.error(f"Error saving BERT results for overall analysis: {e}")
-    
-    def train_roberta_models(self, categories=None):
-        """Train both RoBERTa-base and RoBERTa-large models"""
-        if categories is None:
-            categories = CATEGORY_SIZES
-        
-        logger.info("Training RoBERTa models from config")
-        
-        all_results = {}
-        
-        print(f"\n{'='*80}")
-        print(f"STARTING RoBERTa MODEL TRAINING PIPELINE")
-        print(f"{'='*80}")
-        print(f"Category sizes: {categories}")
-        print(f"Models: {list(self.config['available_models'].values())}")
-        print(f"{'='*80}")
-        
-        # Train models from config
-        for model_key, model_name in self.config['available_models'].items():
-            print(f"\n{'-'*60}")
-            print(f"TRAINING {model_name.upper()}")
-            print(f"{'-'*60}")
-            
-            model_results = {}
-            
-            for n_categories in categories:
-                print(f"\n>>> Processing top_{n_categories}_categories with {model_name}...")
-                
-                try:
-                    results = self.train_model_on_category(n_categories, model_name)
-                    model_results[n_categories] = results
-                    
-                    # Save individual results
-                    category_dir = SAVED_MODELS_CONFIG['bert_models_path'] / f'top_{n_categories}_categories'
-                    category_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Save as JSON with standardized naming
-                    model_variant = model_name.replace('-', '_')
-                    results_json = category_dir / f'bert_{model_variant}_results.json'
-                    with open(results_json, 'w') as f:
-                        json_safe_results = self.make_json_serializable(results)
-                        json.dump(json_safe_results, f, indent=2)
-                    
-                    logger.info(f"Results saved to {results_json}")
-                    logger.info(f"Training completed successfully for {model_name} on {n_categories} categories")
-                    
-                except Exception as e:
-                    logger.error(f"Error training {model_name} for {n_categories} categories: {str(e)}")
-                    logger.error(f"Full traceback: {traceback.format_exc()}")
-                    continue
-                
-                # Clear GPU memory after each training
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
-            
-            all_results[model_key] = model_results
-        
-        print(f"\n{'='*80}")
-        print(f"RoBERTa MODEL TRAINING PIPELINE COMPLETED")
-        print(f"{'='*80}")
-        
-        # Print comparison if multiple models trained
-        if len(all_results) > 1:
-            self._print_roberta_comparison(all_results)
-        
-        # Save results for overall analysis
-        self.save_results_for_overall_analysis(all_results)
-        
-        return all_results
-    
-    def _print_roberta_comparison(self, all_results):
-        """Print comparison between RoBERTa models"""
-        print(f"\n{'='*80}")
-        print(f"RoBERTa MODEL COMPARISON SUMMARY")
-        print(f"{'='*80}")
-        
-        for n_categories in CATEGORY_SIZES:
-            results_for_category = {}
-            
-            # Collect results for this category
-            for model_key, model_results in all_results.items():
-                if n_categories in model_results:
-                    results_for_category[model_key] = model_results[n_categories]
-            
-            if results_for_category:
-                print(f"\nTop {n_categories} Categories Results:")
-                print(f"{'Model':<15} {'Top-1 Acc':<10} {'Top-3 Acc':<10} {'Top-5 Acc':<10} {'Macro F1':<10} {'Training Time':<15}")
-                print("-" * 85)
-                
-                # Sort by F1 score
-                model_scores = []
-                for model_key, result in results_for_category.items():
-                    model_name = self.config['available_models'][model_key]
-                    model_scores.append((
-                        model_name,
-                        result['top1_accuracy'],
-                        result['top3_accuracy'],
-                        result['top5_accuracy'],
-                        result['macro_f1'],
-                        result['training_time']
-                    ))
-                
-                model_scores.sort(key=lambda x: x[4], reverse=True)  # Sort by F1
-                
-                for model_name, top1, top3, top5, f1, time_taken in model_scores:
-                    print(f"{model_name:<15} {top1:<10.4f} {top3:<10.4f} {top5:<10.4f} {f1:<10.4f} {time_taken:<15.2f}")
-                
-                # Performance comparison for two models
-                if len(model_scores) == 2:
-                    base_f1 = next(score[4] for score in model_scores if 'base' in score[0])
-                    large_f1 = next(score[4] for score in model_scores if 'large' in score[0])
-                    improvement = large_f1 - base_f1
-                    
-                    print(f"\nPerformance Analysis:")
-                    print(f"  RoBERTa-large vs RoBERTa-base F1 improvement: {improvement:+.4f}")
-                    print(f"  Relative improvement: {(improvement/base_f1)*100:+.2f}%")
-        
-        print(f"{'='*80}")
-    
-    def train_all_categories(self):
-        """Train RoBERTa models on all category sizes (uses config models)"""
-        return self.train_roberta_models()
-    
-    def plot_roberta_results_only(self):
-        """Convenience function to plot RoBERTa results with config paths"""
-        results_file_path = RESULTS_CONFIG["bert_comparisons_path"] / "bert_final_results.pkl"
-        charts_dir = RESULTS_CONFIG["bert_comparisons_path"] / "charts"
-        
-        self.evaluator.plot_results_comparison(results_file_path, charts_dir, "bert")
-
-
-def main():
-    """Main function to run comprehensive RoBERTa model training and analysis"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="RoBERTa Model Training for Web Service Classification")
-    parser.add_argument("--model", type=str, default="both", 
-                       choices=["roberta_base", "roberta_large", "both"],
-                       help="RoBERTa model to train (default: both)")
-    parser.add_argument("--categories", nargs="+", type=int, default=CATEGORY_SIZES,
-                       help="Category sizes to train")
-    
-    args = parser.parse_args()
-    
-    trainer = RoBERTaModelTrainer()
-    
-    if args.model == "both":
-        # Train both RoBERTa models from config
-        results = trainer.train_roberta_models(args.categories)
-    else:
-        # Train single model
-        model_name = BERT_CONFIG['available_models'][args.model]
-        logger.info(f"Training single model: {model_name}")
-        
-        results = {}
-        for n_categories in args.categories:
-            results[n_categories] = trainer.train_model_on_category(n_categories, model_name)
-    
-    # Save final results
-    out_file = SAVED_MODELS_CONFIG["bert_models_path"] / "bert_final_results.json"
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_file, "w") as f:
-        json_safe_results = trainer.make_json_serializable(results)
-        json.dump(json_safe_results, f, indent=2)
-    logger.info(f"Results saved to {out_file}")
-
-
-if __name__ == "__main__":
-    main()f"Error loading tokenizer: {e}")
+            logger.error(f"Error loading tokenizer: {e}")
             raise
     
     def tokenize_function(self, batch):
@@ -704,3 +493,210 @@ if __name__ == "__main__":
             logger.error(f"Error training {model_name} for {n_categories} categories: {str(e)}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
+    
+    def save_results_for_overall_analysis(self, all_results):
+        """Save results in the format expected by OverallPerformanceAnalyzer"""
+        try:
+            comparisons_path = RESULTS_CONFIG['bert_comparisons_path']
+            comparisons_path.mkdir(parents=True, exist_ok=True)
+            
+            # Transform results into the format expected by OverallPerformanceAnalyzer
+            formatted_results = {}
+            
+            for model_key, model_results in all_results.items():
+                for n_categories, result in model_results.items():
+                    if n_categories not in formatted_results:
+                        formatted_results[n_categories] = {}
+                    
+                    # Create a key that matches the expected format
+                    model_name = result.get('model_name', f'bert_model')
+                    feature_type = result.get('feature_type', 'raw_text')
+                    
+                    # Use consistent naming pattern
+                    clean_model_name = FileNamingStandard.standardize_model_name(model_name)
+                    result_key = f"{clean_model_name}_{feature_type}"
+                    formatted_results[n_categories][result_key] = result
+            
+            # Save as pickle file with the expected name
+            pickle_file = comparisons_path / "bert_final_results.pkl"
+            with open(pickle_file, 'wb') as f:
+                pickle.dump(formatted_results, f)
+            
+            logger.info(f"BERT results saved for overall analysis: {pickle_file}")
+            
+            # Also save JSON for debugging
+            json_file = comparisons_path / "bert_final_results.json"
+            with open(json_file, 'w') as f:
+                json_safe_results = self.make_json_serializable(formatted_results)
+                json.dump(json_safe_results, f, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error saving BERT results for overall analysis: {e}")
+    
+    def train_roberta_models(self, categories=None):
+        """Train both RoBERTa-base and RoBERTa-large models"""
+        if categories is None:
+            categories = CATEGORY_SIZES
+        
+        logger.info("Training RoBERTa models from config")
+        
+        all_results = {}
+        
+        print(f"\n{'='*80}")
+        print(f"STARTING RoBERTa MODEL TRAINING PIPELINE")
+        print(f"{'='*80}")
+        print(f"Category sizes: {categories}")
+        print(f"Models: {list(self.config['available_models'].values())}")
+        print(f"{'='*80}")
+        
+        # Train models from config
+        for model_key, model_name in self.config['available_models'].items():
+            print(f"\n{'-'*60}")
+            print(f"TRAINING {model_name.upper()}")
+            print(f"{'-'*60}")
+            
+            model_results = {}
+            
+            for n_categories in categories:
+                print(f"\n>>> Processing top_{n_categories}_categories with {model_name}...")
+                
+                try:
+                    results = self.train_model_on_category(n_categories, model_name)
+                    model_results[n_categories] = results
+                    
+                    # Save individual results
+                    category_dir = SAVED_MODELS_CONFIG['bert_models_path'] / f'top_{n_categories}_categories'
+                    category_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Save as JSON with standardized naming
+                    model_variant = model_name.replace('-', '_')
+                    results_json = category_dir / f'bert_{model_variant}_results.json'
+                    with open(results_json, 'w') as f:
+                        json_safe_results = self.make_json_serializable(results)
+                        json.dump(json_safe_results, f, indent=2)
+                    
+                    logger.info(f"Results saved to {results_json}")
+                    logger.info(f"Training completed successfully for {model_name} on {n_categories} categories")
+                    
+                except Exception as e:
+                    logger.error(f"Error training {model_name} for {n_categories} categories: {str(e)}")
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    continue
+                
+                # Clear GPU memory after each training
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            
+            all_results[model_key] = model_results
+        
+        print(f"\n{'='*80}")
+        print(f"RoBERTa MODEL TRAINING PIPELINE COMPLETED")
+        print(f"{'='*80}")
+        
+        # Print comparison if multiple models trained
+        if len(all_results) > 1:
+            self._print_roberta_comparison(all_results)
+        
+        # Save results for overall analysis
+        self.save_results_for_overall_analysis(all_results)
+        
+        return all_results
+    
+    def _print_roberta_comparison(self, all_results):
+        """Print comparison between RoBERTa models"""
+        print(f"\n{'='*80}")
+        print(f"RoBERTa MODEL COMPARISON SUMMARY")
+        print(f"{'='*80}")
+        
+        for n_categories in CATEGORY_SIZES:
+            results_for_category = {}
+            
+            # Collect results for this category
+            for model_key, model_results in all_results.items():
+                if n_categories in model_results:
+                    results_for_category[model_key] = model_results[n_categories]
+            
+            if results_for_category:
+                print(f"\nTop {n_categories} Categories Results:")
+                print(f"{'Model':<15} {'Top-1 Acc':<10} {'Top-3 Acc':<10} {'Top-5 Acc':<10} {'Macro F1':<10} {'Training Time':<15}")
+                print("-" * 85)
+                
+                # Sort by F1 score
+                model_scores = []
+                for model_key, result in results_for_category.items():
+                    model_name = self.config['available_models'][model_key]
+                    model_scores.append((
+                        model_name,
+                        result['top1_accuracy'],
+                        result['top3_accuracy'],
+                        result['top5_accuracy'],
+                        result['macro_f1'],
+                        result['training_time']
+                    ))
+                
+                model_scores.sort(key=lambda x: x[4], reverse=True)  # Sort by F1
+                
+                for model_name, top1, top3, top5, f1, time_taken in model_scores:
+                    print(f"{model_name:<15} {top1:<10.4f} {top3:<10.4f} {top5:<10.4f} {f1:<10.4f} {time_taken:<15.2f}")
+                
+                # Performance comparison for two models
+                if len(model_scores) == 2:
+                    base_f1 = next(score[4] for score in model_scores if 'base' in score[0])
+                    large_f1 = next(score[4] for score in model_scores if 'large' in score[0])
+                    improvement = large_f1 - base_f1
+                    
+                    print(f"\nPerformance Analysis:")
+                    print(f"  RoBERTa-large vs RoBERTa-base F1 improvement: {improvement:+.4f}")
+                    print(f"  Relative improvement: {(improvement/base_f1)*100:+.2f}%")
+        
+        print(f"{'='*80}")
+    
+    def train_all_categories(self):
+        """Train RoBERTa models on all category sizes (uses config models)"""
+        return self.train_roberta_models()
+    
+    def plot_roberta_results_only(self):
+        """Convenience function to plot RoBERTa results with config paths"""
+        results_file_path = RESULTS_CONFIG["bert_comparisons_path"] / "bert_final_results.pkl"
+        charts_dir = RESULTS_CONFIG["bert_comparisons_path"] / "charts"
+        
+        self.evaluator.plot_results_comparison(results_file_path, charts_dir, "bert")
+
+
+def main():
+    """Main function to run comprehensive RoBERTa model training and analysis"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="RoBERTa Model Training for Web Service Classification")
+    parser.add_argument("--model", type=str, default="both", 
+                       choices=["roberta_base", "roberta_large", "both"],
+                       help="RoBERTa model to train (default: both)")
+    parser.add_argument("--categories", nargs="+", type=int, default=CATEGORY_SIZES,
+                       help="Category sizes to train")
+    
+    args = parser.parse_args()
+    
+    trainer = RoBERTaModelTrainer()
+    
+    if args.model == "both":
+        # Train both RoBERTa models from config
+        results = trainer.train_roberta_models(args.categories)
+    else:
+        # Train single model
+        model_name = BERT_CONFIG['available_models'][args.model]
+        logger.info(f"Training single model: {model_name}")
+        
+        results = {}
+        for n_categories in args.categories:
+            results[n_categories] = trainer.train_model_on_category(n_categories, model_name)
+    
+    # Save final results
+    out_file = SAVED_MODELS_CONFIG["bert_models_path"] / "bert_final_results.json"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w") as f:
+        json_safe_results = trainer.make_json_serializable(results)
+        json.dump(json_safe_results, f, indent=2)
+    logger.info(f"Results saved to {out_file}")
+
+
+if __name__ == "__main__":
+    main()
