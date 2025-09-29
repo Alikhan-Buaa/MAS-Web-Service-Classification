@@ -80,7 +80,8 @@ class ModelEvaluator:
             'dl': 'dl', 
             'bert': 'bert',
             'roberta': 'bert',  # Map roberta to bert directory
-            'deepseek': 'deepseek'
+            'deepseek': 'deepseek',
+            'fusion':'fusion'
         }
         
         # Get the correct model type for directory structure
@@ -95,6 +96,9 @@ class ModelEvaluator:
             return RESULTS_CONFIG['ml_category_paths'][n_categories]
         elif dir_model_type == 'dl':
             return RESULTS_CONFIG['dl_category_paths'][n_categories]
+        elif dir_model_type == 'fusion':
+            return RESULTS_CONFIG['fusion_category_paths'][n_categories]
+            
         else:
             # Fallback - create a generic path
             fallback_path = Path(f"results/{dir_model_type}/top_{n_categories}_categories")
