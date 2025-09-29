@@ -1,0 +1,5 @@
+Categories,Model,Feature,Accuracy,F1-Score,Top-1,Top-3,Top-5
+50,RoBERTa_Fusion_Concat,fusion_roberta_fusion_concat,0.7262,0.719,0.7262,0.8465,0.8885
+50,RoBERTa_Fusion_Average,fusion_roberta_fusion_average,0.3861,0.2952,0.3861,0.6527,0.7605
+50,RoBERTa_Fusion_Weighted,fusion_roberta_fusion_weighted,0.7851,0.79,0.7851,0.8873,0.9144
+50,RoBERTa_Fusion_Gating,fusion_roberta_fusion_gating,0.7948,0.7978,0.7948,0.8829,0.9087

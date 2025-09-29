@@ -1,0 +1,14 @@
+{
+  "evaluation": {
+    "status": "completed",
+    "summary": "Evaluation completed for available models",
+    "analysis_results": {
+      "ml_analysis": false,
+      "dl_analysis": false,
+      "bert_analysis": false,
+      "fusion_analysis": true,
+      "deepseek_analysis": false
+    },
+    "charts_generated": true
+  }
+}
