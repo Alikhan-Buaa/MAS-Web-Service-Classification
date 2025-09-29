@@ -1,6 +1,6 @@
 """
-Enhanced RoBERTa Fusion Models for Web Service Classification
-Fusion model using multiple RoBERTa layers with standardized naming
+DeepSeek-RoBERTa Fusion Models for Web Service Classification
+Combines embeddings from DeepSeek and RoBERTa with multiple fusion strategies
 """
 
 import pandas as pd
@@ -18,11 +18,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
-from transformers import RobertaTokenizer, RobertaModel
+from transformers import AutoTokenizer, AutoModel, RobertaTokenizer, RobertaModel
 
 # Import configuration and utilities
 from src.config import (
-    CATEGORY_SIZES, SAVED_MODELS_CONFIG, FUSION_CONFIG, 
+    CATEGORY_SIZES, SAVED_MODELS_CONFIG, DEEPSEEK_ROBERTA_FUSION_CONFIG,
     PREPROCESSING_CONFIG, RANDOM_SEED, RESULTS_CONFIG
 )
 from src.evaluation.evaluate import ModelEvaluator
@@ -32,7 +32,7 @@ from src.utils.utils import FileNamingStandard
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Set random seeds for reproducibility
+# Set random seeds
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 random.seed(RANDOM_SEED)
@@ -41,45 +41,71 @@ if torch.cuda.is_available():
 
 
 # ============================================================================
-# ROBERTA FUSION MODEL ARCHITECTURE
+# DEEPSEEK-ROBERTA FUSION MODEL ARCHITECTURE
 # ============================================================================
 
-class RoBERTaFusionModel(nn.Module):
+class DeepSeekRoBERTaFusionModel(nn.Module):
     """
-    RoBERTa Fusion Model - extracts and fuses embeddings from multiple layers
+    Fusion model combining DeepSeek and RoBERTa embeddings
+    Supports: concatenation, averaging, weighted, and gating fusion
     """
     
     def __init__(self, config, num_labels):
-        super(RoBERTaFusionModel, self).__init__()
+        super(DeepSeekRoBERTaFusionModel, self).__init__()
         
         self.config = config
         self.num_labels = num_labels
         self.fusion_type = config.get('fusion_type', 'concat')
-        self.num_layers_to_fuse = config.get('num_layers_to_fuse', 4)
         dropout = config.get('dropout', 0.3)
         
-        # Load RoBERTa
-        roberta_model_name = config.get('roberta_model', 'roberta-base')
-        self.roberta = RobertaModel.from_pretrained(roberta_model_name)
-        self.hidden_size = self.roberta.config.hidden_size
+        # Load DeepSeek model
+        deepseek_model_name = config.get('deepseek_model', 'deepseek-ai/deepseek-llm-7b-base')
+        logger.info(f"Loading DeepSeek model: {deepseek_model_name}")
+        self.deepseek = AutoModel.from_pretrained(
+            deepseek_model_name,
+            trust_remote_code=True,
+            torch_dtype=torch.float16
+        )
+        self.deepseek_hidden_size = self.deepseek.config.hidden_size
         
-        # Calculate fused dimension
+        # Load RoBERTa model
+        roberta_model_name = config.get('roberta_model', 'roberta-base')
+        logger.info(f"Loading RoBERTa model: {roberta_model_name}")
+        self.roberta = RobertaModel.from_pretrained(roberta_model_name)
+        self.roberta_hidden_size = self.roberta.config.hidden_size
+        
+        # Projection layers to common dimension if sizes differ
+        self.common_dim = config.get('common_dim', 768)
+        
+        if self.deepseek_hidden_size != self.common_dim:
+            self.deepseek_proj = nn.Linear(self.deepseek_hidden_size, self.common_dim)
+        else:
+            self.deepseek_proj = nn.Identity()
+        
+        if self.roberta_hidden_size != self.common_dim:
+            self.roberta_proj = nn.Linear(self.roberta_hidden_size, self.common_dim)
+        else:
+            self.roberta_proj = nn.Identity()
+        
+        # Determine fused dimension based on fusion type
         if self.fusion_type == 'concat':
-            fused_dim = self.hidden_size * self.num_layers_to_fuse
+            fused_dim = self.common_dim * 2
         elif self.fusion_type == 'average':
-            fused_dim = self.hidden_size
+            fused_dim = self.common_dim
         elif self.fusion_type == 'weighted':
-            self.layer_weights = nn.Parameter(torch.ones(self.num_layers_to_fuse))
-            fused_dim = self.hidden_size
+            # Learnable weights for each model
+            self.alpha = nn.Parameter(torch.tensor(0.5))
+            fused_dim = self.common_dim
         elif self.fusion_type == 'gating':
+            # Gating network
             self.gate = nn.Sequential(
-                nn.Linear(self.hidden_size * self.num_layers_to_fuse, 512),
+                nn.Linear(self.common_dim * 2, 512),
                 nn.ReLU(),
                 nn.Dropout(dropout),
-                nn.Linear(512, self.num_layers_to_fuse),
-                nn.Softmax(dim=-1)
+                nn.Linear(512, self.common_dim),
+                nn.Sigmoid()
             )
-            fused_dim = self.hidden_size
+            fused_dim = self.common_dim
         else:
             raise ValueError(f"Unknown fusion type: {self.fusion_type}")
         
@@ -101,49 +127,78 @@ class RoBERTaFusionModel(nn.Module):
         
         # Temperature for calibration
         self.temperature = nn.Parameter(torch.ones(1))
+        
+        logger.info(f"Fusion type: {self.fusion_type}, Fused dim: {fused_dim}")
     
-    def extract_layer_embeddings(self, input_ids, attention_mask):
-        """Extract [CLS] embeddings from multiple layers"""
+    def extract_deepseek_embedding(self, input_ids, attention_mask):
+        """Extract DeepSeek embedding with mean pooling"""
+        outputs = self.deepseek(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=False
+        )
+        
+        # Mean pooling over sequence length
+        last_hidden_state = outputs.last_hidden_state
+        mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+        sum_embeddings = torch.sum(last_hidden_state * mask_expanded, 1)
+        sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+        pooled = sum_embeddings / sum_mask
+        
+        # Project to common dimension
+        projected = self.deepseek_proj(pooled.float())
+        
+        return projected
+    
+    def extract_roberta_embedding(self, input_ids, attention_mask):
+        """Extract RoBERTa embedding (CLS token)"""
         outputs = self.roberta(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            output_hidden_states=True
+            output_hidden_states=False
         )
         
-        all_hidden_states = outputs.hidden_states
-        layer_embeddings = []
+        # Use CLS token
+        cls_embedding = outputs.last_hidden_state[:, 0, :]
         
-        for i in range(-self.num_layers_to_fuse, 0):
-            cls_embedding = all_hidden_states[i][:, 0, :]
-            layer_embeddings.append(cls_embedding)
+        # Project to common dimension
+        projected = self.roberta_proj(cls_embedding)
         
-        return layer_embeddings
+        return projected
     
-    def fuse_embeddings(self, layer_embeddings):
-        """Fuse layer embeddings"""
+    def fuse_embeddings(self, deepseek_emb, roberta_emb):
+        """Fuse embeddings based on fusion type"""
         if self.fusion_type == 'concat':
-            return torch.cat(layer_embeddings, dim=1)
+            # Simple concatenation
+            return torch.cat([deepseek_emb, roberta_emb], dim=1)
         
         elif self.fusion_type == 'average':
-            stacked = torch.stack(layer_embeddings, dim=0)
-            return torch.mean(stacked, dim=0)
+            # Simple average
+            return (deepseek_emb + roberta_emb) / 2.0
         
         elif self.fusion_type == 'weighted':
-            weights = F.softmax(self.layer_weights, dim=0)
-            weighted_layers = [weights[i] * emb for i, emb in enumerate(layer_embeddings)]
-            return torch.stack(weighted_layers, dim=0).sum(dim=0)
+            # Learnable weighted combination
+            alpha = torch.sigmoid(self.alpha)  # Constrain to [0, 1]
+            return alpha * deepseek_emb + (1 - alpha) * roberta_emb
         
         elif self.fusion_type == 'gating':
-            concat = torch.cat(layer_embeddings, dim=1)
-            gate_weights = self.gate(concat)
-            weighted_layers = [gate_weights[:, i:i+1] * emb for i, emb in enumerate(layer_embeddings)]
-            return torch.stack(weighted_layers, dim=0).sum(dim=0)
+            # Gated fusion - context-dependent weighting
+            concat = torch.cat([deepseek_emb, roberta_emb], dim=1)
+            gate = self.gate(concat)  # Shape: (batch_size, common_dim)
+            return gate * deepseek_emb + (1 - gate) * roberta_emb
     
-    def forward(self, input_ids, attention_mask, apply_temperature=False):
-        """Forward pass"""
-        layer_embeddings = self.extract_layer_embeddings(input_ids, attention_mask)
-        fused_embedding = self.fuse_embeddings(layer_embeddings)
-        logits = self.classifier(fused_embedding)
+    def forward(self, deepseek_input_ids, deepseek_attention_mask, 
+                roberta_input_ids, roberta_attention_mask, apply_temperature=False):
+        """Forward pass through fusion model"""
+        # Extract embeddings from both models
+        deepseek_emb = self.extract_deepseek_embedding(deepseek_input_ids, deepseek_attention_mask)
+        roberta_emb = self.extract_roberta_embedding(roberta_input_ids, roberta_attention_mask)
+        
+        # Fuse embeddings
+        fused_emb = self.fuse_embeddings(deepseek_emb, roberta_emb)
+        
+        # Classification
+        logits = self.classifier(fused_emb)
         
         if apply_temperature:
             logits = logits / self.temperature
@@ -155,13 +210,14 @@ class RoBERTaFusionModel(nn.Module):
 # DATASET
 # ============================================================================
 
-class RoBERTaFusionDataset(Dataset):
-    """Dataset for RoBERTa fusion model"""
+class DeepSeekRoBERTaFusionDataset(Dataset):
+    """Dataset for DeepSeek-RoBERTa fusion model"""
     
-    def __init__(self, texts, labels, tokenizer, max_length=128):
+    def __init__(self, texts, labels, deepseek_tokenizer, roberta_tokenizer, max_length=128):
         self.texts = texts
         self.labels = labels
-        self.tokenizer = tokenizer
+        self.deepseek_tokenizer = deepseek_tokenizer
+        self.roberta_tokenizer = roberta_tokenizer
         self.max_length = max_length
     
     def __len__(self):
@@ -171,7 +227,17 @@ class RoBERTaFusionDataset(Dataset):
         text = str(self.texts[idx])
         label = int(self.labels[idx])
         
-        encoding = self.tokenizer(
+        # Tokenize for DeepSeek
+        deepseek_encoding = self.deepseek_tokenizer(
+            text,
+            truncation=True,
+            padding='max_length',
+            max_length=self.max_length,
+            return_tensors='pt'
+        )
+        
+        # Tokenize for RoBERTa
+        roberta_encoding = self.roberta_tokenizer(
             text,
             truncation=True,
             padding='max_length',
@@ -180,8 +246,10 @@ class RoBERTaFusionDataset(Dataset):
         )
         
         return {
-            'input_ids': encoding['input_ids'].squeeze(0),
-            'attention_mask': encoding['attention_mask'].squeeze(0),
+            'deepseek_input_ids': deepseek_encoding['input_ids'].squeeze(0),
+            'deepseek_attention_mask': deepseek_encoding['attention_mask'].squeeze(0),
+            'roberta_input_ids': roberta_encoding['input_ids'].squeeze(0),
+            'roberta_attention_mask': roberta_encoding['attention_mask'].squeeze(0),
             'label': torch.tensor(label, dtype=torch.long)
         }
 
@@ -190,16 +258,16 @@ class RoBERTaFusionDataset(Dataset):
 # TRAINER
 # ============================================================================
 
-class RoBERTaFusionTrainer:
-    """Enhanced RoBERTa Fusion model trainer with standardized naming"""
+class DeepSeekRoBERTaFusionTrainer:
+    """Trainer for DeepSeek-RoBERTa Fusion models"""
     
     @staticmethod
     def make_json_serializable(obj):
-        """Convert numpy types and Path objects to native Python types for JSON serialization"""
+        """Convert numpy types and Path objects to native Python types"""
         if isinstance(obj, dict):
-            return {key: RoBERTaFusionTrainer.make_json_serializable(value) for key, value in obj.items()}
+            return {key: DeepSeekRoBERTaFusionTrainer.make_json_serializable(value) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return [RoBERTaFusionTrainer.make_json_serializable(item) for item in obj]
+            return [DeepSeekRoBERTaFusionTrainer.make_json_serializable(item) for item in obj]
         elif isinstance(obj, (Path, type(Path()))):
             return str(obj)
         elif isinstance(obj, np.integer):
@@ -214,49 +282,37 @@ class RoBERTaFusionTrainer:
             return obj
     
     def __init__(self):
-        self.tokenizer = None
+        self.deepseek_tokenizer = None
+        self.roberta_tokenizer = None
         self.model = None
-        
-        # Copy config and add missing values with defaults if not present
         self.config = FUSION_CONFIG.copy()
-        if 'weight_decay' not in self.config:
-            self.config['weight_decay'] = 0.01
-        if 'eval_batch_size' not in self.config:
-            self.config['eval_batch_size'] = 32
-        if 'gradient_clip' not in self.config:
-            self.config['gradient_clip'] = 1.0
-        if 'scheduler' not in self.config:
-            self.config['scheduler'] = {
-                'mode': 'max',
-                'patience': 2,
-                'factor': 0.5,
-                'verbose': True
-            }
-        
         self.evaluator = ModelEvaluator()
         
         # Configure GPU
         self._configure_gpu()
         
-        # Create results directories
+        # Create directories
         self._create_directories()
     
     def _configure_gpu(self):
-        """Configure GPU memory and device"""
+        """Configure GPU"""
         try:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             if torch.cuda.is_available():
                 logger.info(f"Using GPU: {torch.cuda.get_device_name()}")
+                self.scaler = torch.cuda.amp.GradScaler()
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
             else:
                 logger.info("Using CPU")
+                self.scaler = None
         except Exception as e:
             logger.warning(f"GPU configuration warning: {e}")
             self.device = torch.device("cpu")
+            self.scaler = None
     
     def _create_directories(self):
-        """Create necessary directories for results and visualizations"""
+        """Create result directories"""
         directories = [
             RESULTS_CONFIG['fusion_results_path'],
             RESULTS_CONFIG['fusion_comparisons_path'],
@@ -270,7 +326,7 @@ class RoBERTaFusionTrainer:
             category_dir = RESULTS_CONFIG['fusion_category_paths'][n_categories]
             category_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info("Created result directories for RoBERTa Fusion models")
+        logger.info("Created DeepSeek-RoBERTa Fusion result directories")
     
     def get_model_config(self, fusion_type):
         """Get fusion-specific configuration"""
@@ -278,24 +334,28 @@ class RoBERTaFusionTrainer:
         model_config['fusion_type'] = fusion_type
         return model_config
     
-    def load_tokenizer(self, model_name=None):
-        """Load RoBERTa tokenizer"""
+    def load_tokenizers(self):
+        """Load both tokenizers"""
         try:
-            if model_name is None:
-                model_name = self.config.get('roberta_model', 'roberta-base')
+            deepseek_model = self.config.get('deepseek_model', 'deepseek-ai/deepseek-llm-7b-base')
+            roberta_model = self.config.get('roberta_model', 'roberta-base')
             
-            self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
-            logger.info(f"Loaded RoBERTa tokenizer: {model_name}")
+            self.deepseek_tokenizer = AutoTokenizer.from_pretrained(
+                deepseek_model,
+                trust_remote_code=True
+            )
+            self.roberta_tokenizer = RobertaTokenizer.from_pretrained(roberta_model)
+            
+            logger.info(f"Loaded tokenizers: DeepSeek={deepseek_model}, RoBERTa={roberta_model}")
         except Exception as e:
-            logger.error(f"Error loading tokenizer: {e}")
+            logger.error(f"Error loading tokenizers: {e}")
             raise
     
     def prepare_datasets(self, n_categories):
-        """Load and prepare datasets for training"""
+        """Prepare datasets"""
         try:
             logger.info(f"Loading datasets for top_{n_categories}_categories")
             
-            # Load datasets using correct config paths
             splits_dir = Path(PREPROCESSING_CONFIG["splits"].format(n=n_categories))
             if not splits_dir.exists():
                 raise FileNotFoundError(f"Splits directory not found: {splits_dir}")
@@ -306,7 +366,6 @@ class RoBERTaFusionTrainer:
             
             logger.info(f"Loaded datasets - Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
             
-            # Use cleaned_text if available, otherwise use original text
             text_column = 'cleaned_text' if 'cleaned_text' in train_df.columns else 'text'
             if text_column not in train_df.columns:
                 text_column = 'Service Description' if 'Service Description' in train_df.columns else train_df.columns[0]
@@ -315,29 +374,29 @@ class RoBERTaFusionTrainer:
             
             max_length = self.config.get('max_length', 128)
             
-            # Create datasets
-            train_dataset = RoBERTaFusionDataset(
+            train_dataset = DeepSeekRoBERTaFusionDataset(
                 train_df[text_column].astype(str).tolist(),
                 train_df['encoded_label'].tolist(),
-                self.tokenizer,
+                self.deepseek_tokenizer,
+                self.roberta_tokenizer,
                 max_length
             )
             
-            val_dataset = RoBERTaFusionDataset(
+            val_dataset = DeepSeekRoBERTaFusionDataset(
                 val_df[text_column].astype(str).tolist(),
                 val_df['encoded_label'].tolist(),
-                self.tokenizer,
+                self.deepseek_tokenizer,
+                self.roberta_tokenizer,
                 max_length
             )
             
-            test_dataset = RoBERTaFusionDataset(
+            test_dataset = DeepSeekRoBERTaFusionDataset(
                 test_df[text_column].astype(str).tolist(),
                 test_df['encoded_label'].tolist(),
-                self.tokenizer,
+                self.deepseek_tokenizer,
+                self.roberta_tokenizer,
                 max_length
             )
-            
-            logger.info("Datasets prepared successfully")
             
             return train_dataset, val_dataset, test_dataset
             
@@ -346,12 +405,11 @@ class RoBERTaFusionTrainer:
             raise
     
     def create_model(self, num_labels, fusion_config):
-        """Create RoBERTa Fusion model"""
+        """Create fusion model"""
         try:
-            self.model = RoBERTaFusionModel(fusion_config, num_labels)
+            self.model = DeepSeekRoBERTaFusionModel(fusion_config, num_labels)
             fusion_type = fusion_config.get('fusion_type', 'concat')
-            layers = fusion_config.get('num_layers_to_fuse', 4)
-            logger.info(f"Created RoBERTa Fusion model: {fusion_type}, layers={layers}, labels={num_labels}")
+            logger.info(f"Created DeepSeek-RoBERTa Fusion model: {fusion_type}, labels={num_labels}")
             return self.model
         except Exception as e:
             logger.error(f"Error creating model: {e}")
@@ -365,18 +423,33 @@ class RoBERTaFusionTrainer:
         all_labels = []
         
         for batch in dataloader:
-            input_ids = batch['input_ids'].to(self.device)
-            attention_mask = batch['attention_mask'].to(self.device)
+            deepseek_input_ids = batch['deepseek_input_ids'].to(self.device)
+            deepseek_attention_mask = batch['deepseek_attention_mask'].to(self.device)
+            roberta_input_ids = batch['roberta_input_ids'].to(self.device)
+            roberta_attention_mask = batch['roberta_attention_mask'].to(self.device)
             labels = batch['label'].to(self.device)
             
             optimizer.zero_grad()
-            logits = model(input_ids, attention_mask)
-            loss = criterion(logits, labels)
-            loss.backward()
             
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.get('gradient_clip', 1.0))
-            optimizer.step()
+            # Mixed precision training
+            if self.scaler is not None:
+                with torch.cuda.amp.autocast():
+                    logits = model(deepseek_input_ids, deepseek_attention_mask,
+                                 roberta_input_ids, roberta_attention_mask)
+                    loss = criterion(logits, labels)
+                
+                self.scaler.scale(loss).backward()
+                self.scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.get('gradient_clip', 1.0))
+                self.scaler.step(optimizer)
+                self.scaler.update()
+            else:
+                logits = model(deepseek_input_ids, deepseek_attention_mask,
+                             roberta_input_ids, roberta_attention_mask)
+                loss = criterion(logits, labels)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.get('gradient_clip', 1.0))
+                optimizer.step()
             
             total_loss += loss.item()
             preds = torch.argmax(logits, dim=1)
@@ -398,12 +471,22 @@ class RoBERTaFusionTrainer:
         
         with torch.no_grad():
             for batch in dataloader:
-                input_ids = batch['input_ids'].to(self.device)
-                attention_mask = batch['attention_mask'].to(self.device)
+                deepseek_input_ids = batch['deepseek_input_ids'].to(self.device)
+                deepseek_attention_mask = batch['deepseek_attention_mask'].to(self.device)
+                roberta_input_ids = batch['roberta_input_ids'].to(self.device)
+                roberta_attention_mask = batch['roberta_attention_mask'].to(self.device)
                 labels = batch['label'].to(self.device)
                 
-                logits = model(input_ids, attention_mask)
-                loss = criterion(logits, labels)
+                if self.scaler is not None:
+                    with torch.cuda.amp.autocast():
+                        logits = model(deepseek_input_ids, deepseek_attention_mask,
+                                     roberta_input_ids, roberta_attention_mask)
+                        loss = criterion(logits, labels)
+                else:
+                    logits = model(deepseek_input_ids, deepseek_attention_mask,
+                                 roberta_input_ids, roberta_attention_mask)
+                    loss = criterion(logits, labels)
+                
                 probs = F.softmax(logits, dim=1)
                 
                 total_loss += loss.item()
@@ -428,11 +511,14 @@ class RoBERTaFusionTrainer:
         
         with torch.no_grad():
             for batch in val_loader:
-                input_ids = batch['input_ids'].to(self.device)
-                attention_mask = batch['attention_mask'].to(self.device)
+                deepseek_input_ids = batch['deepseek_input_ids'].to(self.device)
+                deepseek_attention_mask = batch['deepseek_attention_mask'].to(self.device)
+                roberta_input_ids = batch['roberta_input_ids'].to(self.device)
+                roberta_attention_mask = batch['roberta_attention_mask'].to(self.device)
                 labels = batch['label'].to(self.device)
                 
-                logits = model(input_ids, attention_mask, apply_temperature=False)
+                logits = model(deepseek_input_ids, deepseek_attention_mask,
+                             roberta_input_ids, roberta_attention_mask, apply_temperature=False)
                 logits_list.append(logits)
                 labels_list.append(labels)
         
@@ -452,13 +538,12 @@ class RoBERTaFusionTrainer:
         logger.info(f"Optimal temperature: {model.temperature.item():.4f}")
     
     def plot_training_history(self, history, model_name, n_categories):
-        """Create training history plots with standardized naming"""
+        """Create training history plots"""
         try:
             if not history['train_loss'] or not history['val_loss']:
                 logger.warning("Insufficient training history for plotting")
                 return None
             
-            # Create plots
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
             
             epochs = range(1, len(history['train_loss']) + 1)
@@ -484,7 +569,6 @@ class RoBERTaFusionTrainer:
             
             plt.tight_layout()
             
-            # Save plot using standardized naming
             plot_dir = RESULTS_CONFIG['fusion_category_paths'][n_categories]
             plot_dir.mkdir(parents=True, exist_ok=True)
             
@@ -498,11 +582,11 @@ class RoBERTaFusionTrainer:
             return str(plot_file)
             
         except Exception as e:
-            logger.error(f"Error creating training history plot: {str(e)}")
+            logger.error(f"Error creating training history plot: {e}")
             return None
     
     def evaluate_fusion_model(self, model, test_loader, model_name, n_categories, class_labels):
-        """Comprehensive evaluation of RoBERTa Fusion model"""
+        """Comprehensive evaluation"""
         try:
             logger.info(f"Evaluating model: {model_name}")
             
@@ -515,11 +599,14 @@ class RoBERTaFusionTrainer:
             
             with torch.no_grad():
                 for batch in test_loader:
-                    input_ids = batch['input_ids'].to(self.device)
-                    attention_mask = batch['attention_mask'].to(self.device)
+                    deepseek_input_ids = batch['deepseek_input_ids'].to(self.device)
+                    deepseek_attention_mask = batch['deepseek_attention_mask'].to(self.device)
+                    roberta_input_ids = batch['roberta_input_ids'].to(self.device)
+                    roberta_attention_mask = batch['roberta_attention_mask'].to(self.device)
                     labels = batch['label'].to(self.device)
                     
-                    logits = model(input_ids, attention_mask, apply_temperature=True)
+                    logits = model(deepseek_input_ids, deepseek_attention_mask,
+                                 roberta_input_ids, roberta_attention_mask, apply_temperature=True)
                     probs = F.softmax(logits, dim=1)
                     
                     all_probs.append(probs.cpu())
@@ -547,7 +634,7 @@ class RoBERTaFusionTrainer:
                 y_true, y_pred, average='micro', zero_division=0
             )
             
-            # Top-K accuracies using common evaluator
+            # Top-K accuracies
             y_true_onehot = np.eye(n_categories)[y_true]
             top1_accuracy = self.evaluator.calculate_top_k_accuracy(y_true_onehot, y_proba, k=1)
             top3_accuracy = self.evaluator.calculate_top_k_accuracy(y_true_onehot, y_proba, k=3)
@@ -556,19 +643,18 @@ class RoBERTaFusionTrainer:
             # Confusion matrix
             cm = confusion_matrix(y_true, y_pred)
             
-            # Create visualizations using common evaluator with standardized naming
+            # Create visualizations
             fusion_type = model_name.split('-')[-1].lower()
             cm_plot_path = self.evaluator.generate_confusion_heatmap(
-                cm, class_labels, model_name, n_categories, f"fusion_{fusion_type}", "fusion"
+                cm, class_labels, model_name, n_categories, f"deepseek_roberta_fusion_{fusion_type}", "deepseek_roberta_fusion"
             )
             report_path = self.evaluator.generate_classification_report_csv(
-                y_true, y_pred, class_labels, model_name, n_categories, f"fusion_{fusion_type}", "fusion"
+                y_true, y_pred, class_labels, model_name, n_categories, f"deepseek_roberta_fusion_{fusion_type}", "deepseek_roberta_fusion"
             )
             
-            # Compile results
             results = {
                 'model_name': model_name,
-                'feature_type': f'fusion_{fusion_type}',
+                'feature_type': f'deepseek_roberta_fusion_{fusion_type}',
                 'n_categories': int(n_categories),
                 'top1_accuracy': float(top1_accuracy),
                 'top3_accuracy': float(top3_accuracy),
@@ -590,51 +676,42 @@ class RoBERTaFusionTrainer:
             logger.info(f"  Top-3 Accuracy: {top3_accuracy:.4f}")
             logger.info(f"  Top-5 Accuracy: {top5_accuracy:.4f}")
             logger.info(f"  Macro F1: {macro_f1:.4f}")
-            logger.info(f"  Micro F1: {micro_f1:.4f}")
             
             return results
             
         except Exception as e:
-            logger.error(f"Error evaluating model {model_name}: {str(e)}")
+            logger.error(f"Error evaluating model: {e}")
             raise
     
-    def train_model_on_category(self, n_categories, fusion_type=None):
-        """Train RoBERTa Fusion model on a specific category size"""
+    def train_model_on_category(self, n_categories, fusion_type='concat'):
+        """Train DeepSeek-RoBERTa fusion model"""
         try:
-            if fusion_type is None:
-                fusion_type = 'concat'
-            
-            # Validate fusion type
-            available_types = self.config.get('fusion_types', ['concat', 'average', 'weighted', 'gating'])
-            if fusion_type not in available_types:
-                raise ValueError(f"Fusion type {fusion_type} not in available types: {available_types}")
-            
-            model_name = f"RoBERTa-Fusion-{fusion_type.capitalize()}"
+            model_name = f"DeepSeek-RoBERTa-Fusion-{fusion_type.capitalize()}"
             logger.info(f"Training {model_name} for top_{n_categories}_categories")
             
-            # Clear any existing model
-            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            # Clear GPU cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             
-            # Get model-specific configuration
+            # Get model config
             model_config = self.get_model_config(fusion_type)
             
-            # Load tokenizer
-            roberta_model = self.config.get('roberta_model', 'roberta-base')
-            self.load_tokenizer(roberta_model)
+            # Load tokenizers
+            self.load_tokenizers()
             
             # Prepare datasets
             train_dataset, val_dataset, test_dataset = self.prepare_datasets(n_categories)
             
-            # Load class labels using common evaluator
+            # Load class labels
             class_labels = self.evaluator.load_class_labels(n_categories)
             
             # Create model
             model = self.create_model(n_categories, model_config).to(self.device)
             
             # Training setup
-            batch_size = self.config.get('batch_size', 16)
-            eval_batch_size = self.config.get('eval_batch_size', 32)
-            learning_rate = self.config.get('learning_rate', 2e-5)
+            batch_size = self.config.get('batch_size', 8)
+            eval_batch_size = self.config.get('eval_batch_size', 16)
+            learning_rate = self.config.get('learning_rate', 1e-5)
             weight_decay = self.config.get('weight_decay', 0.01)
             epochs = self.config.get('num_train_epochs', 10)
             
@@ -658,8 +735,8 @@ class RoBERTaFusionTrainer:
             best_val_acc = 0.0
             best_model_state = None
             
-            # Train model
             print(f"\nTraining {model_name} on top_{n_categories}_categories...")
+            print(f"Fusion type: {fusion_type}")
             print(f"Batch size: Train={batch_size}, Eval={eval_batch_size}")
             print(f"Learning rate: {learning_rate}")
             
@@ -694,21 +771,19 @@ class RoBERTaFusionTrainer:
             # Load best model
             model.load_state_dict(best_model_state)
             
-            # Save model with standardized naming
+            # Save model
             model_dir = SAVED_MODELS_CONFIG['fusion_models_path'] / f'top_{n_categories}_categories'
             model_dir.mkdir(parents=True, exist_ok=True)
             
             model_filename = FileNamingStandard.generate_model_filename(
-                model_name, f'fusion_{fusion_type}', n_categories, 'model'
+                model_name, f'deepseek_roberta_fusion_{fusion_type}', n_categories, 'model'
             )
             model_path = model_dir / model_filename
             
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'fusion_type': fusion_type,
-                'num_layers_to_fuse': model_config.get('num_layers_to_fuse', 4),
                 'n_categories': n_categories,
-                'roberta_model': roberta_model,
                 'config': model_config
             }, model_path)
             logger.info(f"Model saved to {model_path}")
@@ -729,21 +804,27 @@ class RoBERTaFusionTrainer:
             eval_results['batch_size'] = batch_size
             eval_results['learning_rate'] = learning_rate
             
-            # Print metrics using common evaluator
-            self.evaluator.print_model_metrics(eval_results, display_name, n_categories, f"fusion_{fusion_type}", training_time, "Fusion")
+            # Print metrics
+            self.evaluator.print_model_metrics(
+                eval_results, display_name, n_categories, 
+                f"deepseek_roberta_fusion_{fusion_type}", training_time, "DeepSeek-RoBERTa Fusion"
+            )
             
-            # Save performance data using common evaluator  
-            self.evaluator.save_model_performance_data(eval_results, display_name, n_categories, f"fusion_{fusion_type}", "fusion")
+            # Save performance data
+            self.evaluator.save_model_performance_data(
+                eval_results, display_name, n_categories, 
+                f"deepseek_roberta_fusion_{fusion_type}", "deepseek_roberta_fusion"
+            )
             
             return eval_results
             
         except Exception as e:
-            logger.error(f"Error training {fusion_type} fusion for {n_categories} categories: {str(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            logger.error(f"Error training {fusion_type} fusion for {n_categories} categories: {e}")
+            logger.error(traceback.format_exc())
             raise
     
     def save_results_for_overall_analysis(self, all_results):
-        """Save results in the format expected by OverallPerformanceAnalyzer"""
+        """Save results for overall analysis - compatible with ML/DL/BERT format"""
         try:
             comparisons_path = RESULTS_CONFIG['fusion_comparisons_path']
             comparisons_path.mkdir(parents=True, exist_ok=True)
@@ -758,55 +839,49 @@ class RoBERTaFusionTrainer:
                     
                     # Create result entry with 'model' key for compatibility
                     result_entry = result.copy()
+                    result_entry['model'] = result.get('model_name', f'DeepSeek-RoBERTa-Fusion-{fusion_type.capitalize()}')
                     
-                    # Add 'model' key (required by plotting function)
-                    result_entry['model'] = result.get('model_name', f'RoBERTa-Fusion-{fusion_type.capitalize()}')
-                    
-                    # Ensure all required keys are present
                     if 'n_categories' not in result_entry:
                         result_entry['n_categories'] = n_categories
                     
-                    # Add to list
                     formatted_results[n_categories].append(result_entry)
             
-            # Save as pickle file
+            # Save as pickle - same format as ML/DL/BERT
             pickle_file = comparisons_path / "fusion_final_results.pkl"
             with open(pickle_file, 'wb') as f:
                 pickle.dump(formatted_results, f)
             
-            logger.info(f"Fusion results saved for overall analysis: {pickle_file}")
+            logger.info(f"DeepSeek-RoBERTa Fusion results saved: {pickle_file}")
             
-            # Also save JSON for debugging
+            # Save JSON for debugging
             json_file = comparisons_path / "fusion_final_results.json"
             with open(json_file, 'w') as f:
-                json_safe_results = self.make_json_serializable(formatted_results)
-                json.dump(json_safe_results, f, indent=2)
+                json.dump(self.make_json_serializable(formatted_results), f, indent=2)
             
-            logger.info(f"Fusion results JSON saved: {json_file}")
+            logger.info(f"DeepSeek-RoBERTa Fusion results JSON saved: {json_file}")
             
         except Exception as e:
-            logger.error(f"Error saving Fusion results for overall analysis: {e}")
+            logger.error(f"Error saving results: {e}")
     
     def train_fusion_models(self, categories=None):
-        """Train all RoBERTa Fusion models from config"""
+        """Train all DeepSeek-RoBERTa Fusion models"""
         if categories is None:
             categories = CATEGORY_SIZES
         
-        logger.info("Training RoBERTa Fusion models from config")
+        logger.info("Training DeepSeek-RoBERTa Fusion models")
         
         all_results = {}
         
         print(f"\n{'='*80}")
-        print(f"STARTING RoBERTa FUSION MODEL TRAINING PIPELINE")
+        print(f"STARTING DEEPSEEK-ROBERTA FUSION MODEL TRAINING PIPELINE")
         print(f"{'='*80}")
         print(f"Category sizes: {categories}")
         print(f"Fusion types: {self.config.get('fusion_types', ['concat', 'average', 'weighted', 'gating'])}")
         print(f"{'='*80}")
         
-        # Train models from config
         for fusion_type in self.config.get('fusion_types', ['concat', 'average', 'weighted', 'gating']):
             print(f"\n{'-'*60}")
-            print(f"TRAINING FUSION-{fusion_type.upper()}")
+            print(f"TRAINING DEEPSEEK-ROBERTA-FUSION-{fusion_type.upper()}")
             print(f"{'-'*60}")
             
             fusion_results = {}
@@ -822,30 +897,27 @@ class RoBERTaFusionTrainer:
                     category_dir = SAVED_MODELS_CONFIG['fusion_models_path'] / f'top_{n_categories}_categories'
                     category_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # Save as JSON with standardized naming
-                    results_json = category_dir / f'fusion_{fusion_type}_results.json'
+                    results_json = category_dir / f'deepseek_roberta_fusion_{fusion_type}_results.json'
                     with open(results_json, 'w') as f:
-                        json_safe_results = self.make_json_serializable(results)
-                        json.dump(json_safe_results, f, indent=2)
+                        json.dump(self.make_json_serializable(results), f, indent=2)
                     
                     logger.info(f"Results saved to {results_json}")
-                    logger.info(f"Training completed successfully for {fusion_type} on {n_categories} categories")
                     
                 except Exception as e:
-                    logger.error(f"Error training {fusion_type} for {n_categories} categories: {str(e)}")
-                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    logger.error(f"Error training {fusion_type} for {n_categories} categories: {e}")
                     continue
                 
-                # Clear GPU memory after each training
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                # Clear GPU memory
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
             
             all_results[fusion_type] = fusion_results
         
         print(f"\n{'='*80}")
-        print(f"RoBERTa FUSION MODEL TRAINING PIPELINE COMPLETED")
+        print(f"DEEPSEEK-ROBERTA FUSION MODEL TRAINING PIPELINE COMPLETED")
         print(f"{'='*80}")
         
-        # Print comparison if multiple models trained
+        # Print comparison
         if len(all_results) > 1:
             self._print_fusion_comparison(all_results)
         
@@ -855,15 +927,14 @@ class RoBERTaFusionTrainer:
         return all_results
     
     def _print_fusion_comparison(self, all_results):
-        """Print comparison between RoBERTa Fusion models"""
+        """Print comparison between fusion models"""
         print(f"\n{'='*80}")
-        print(f"RoBERTa FUSION MODEL COMPARISON SUMMARY")
+        print(f"DEEPSEEK-ROBERTA FUSION MODEL COMPARISON SUMMARY")
         print(f"{'='*80}")
         
         for n_categories in CATEGORY_SIZES:
             results_for_category = {}
             
-            # Collect results for this category
             for fusion_key, fusion_results in all_results.items():
                 if n_categories in fusion_results:
                     results_for_category[fusion_key] = fusion_results[n_categories]
@@ -873,7 +944,6 @@ class RoBERTaFusionTrainer:
                 print(f"{'Fusion Type':<15} {'Top-1 Acc':<10} {'Top-3 Acc':<10} {'Top-5 Acc':<10} {'Macro F1':<10} {'Training Time':<15}")
                 print("-" * 85)
                 
-                # Sort by F1 score
                 fusion_scores = []
                 for fusion_key, result in results_for_category.items():
                     fusion_scores.append((
@@ -885,12 +955,11 @@ class RoBERTaFusionTrainer:
                         result['training_time']
                     ))
                 
-                fusion_scores.sort(key=lambda x: x[4], reverse=True)  # Sort by F1
+                fusion_scores.sort(key=lambda x: x[4], reverse=True)
                 
                 for fusion_type, top1, top3, top5, f1, time_taken in fusion_scores:
                     print(f"{fusion_type:<15} {top1:<10.4f} {top3:<10.4f} {top5:<10.4f} {f1:<10.4f} {time_taken:<15.2f}")
                 
-                # Performance comparison
                 if len(fusion_scores) >= 2:
                     best_f1 = fusion_scores[0][4]
                     worst_f1 = fusion_scores[-1][4]
@@ -904,41 +973,36 @@ class RoBERTaFusionTrainer:
         print(f"{'='*80}")
     
     def train_all_categories(self):
-        """Train RoBERTa Fusion models on all category sizes (uses config fusion types)"""
+        """Train all fusion models on all categories"""
         return self.train_fusion_models()
-    
-    def plot_fusion_results_only(self):
-        """Convenience function to plot Fusion results with config paths"""
-        results_file_path = RESULTS_CONFIG["fusion_comparisons_path"] / "fusion_final_results.pkl"
-        charts_dir = RESULTS_CONFIG["fusion_comparisons_path"] / "charts"
-        
-        self.evaluator.plot_results_comparison(results_file_path, charts_dir, "fusion")
 
+
+# ============================================================================
+# MAIN FUNCTION
+# ============================================================================
 
 def main():
-    """Main function to run comprehensive RoBERTa Fusion model training and analysis"""
+    """Main function to run DeepSeek-RoBERTa Fusion training"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="RoBERTa Fusion Model Training for Web Service Classification")
-    parser.add_argument("--fusion-type", type=str, default="all", 
+    parser = argparse.ArgumentParser(description="DeepSeek-RoBERTa Fusion Model Training")
+    parser.add_argument("--fusion-type", type=str, default="all",
                        choices=["concat", "average", "weighted", "gating", "all"],
-                       help="Fusion type to train (default: all)")
+                       help="Fusion type to train")
     parser.add_argument("--categories", nargs="+", type=int, default=CATEGORY_SIZES,
                        help="Category sizes to train")
     parser.add_argument("--epochs", type=int, default=None,
-                       help="Number of epochs (overrides config)")
+                       help="Number of epochs")
     parser.add_argument("--batch-size", type=int, default=None,
-                       help="Batch size (overrides config)")
+                       help="Batch size")
     parser.add_argument("--lr", type=float, default=None,
-                       help="Learning rate (overrides config)")
-    parser.add_argument("--layers", type=int, default=None,
-                       help="Number of layers to fuse (overrides config)")
+                       help="Learning rate")
     
     args = parser.parse_args()
     
-    trainer = RoBERTaFusionTrainer()
+    trainer = DeepSeekRoBERTaFusionTrainer()
     
-    # Override config if command line args provided
+    # Override config if provided
     if args.epochs is not None:
         trainer.config['num_train_epochs'] = args.epochs
         logger.info(f"Overriding epochs: {args.epochs}")
@@ -948,17 +1012,11 @@ def main():
     if args.lr is not None:
         trainer.config['learning_rate'] = args.lr
         logger.info(f"Overriding learning rate: {args.lr}")
-    if args.layers is not None:
-        trainer.config['num_layers_to_fuse'] = args.layers
-        logger.info(f"Overriding layers to fuse: {args.layers}")
     
     if args.fusion_type == "all":
-        # Train all RoBERTa Fusion models from config
         results = trainer.train_fusion_models(args.categories)
     else:
-        # Train single fusion type
         logger.info(f"Training single fusion type: {args.fusion_type}")
-        
         results = {}
         for n_categories in args.categories:
             results[n_categories] = trainer.train_model_on_category(n_categories, args.fusion_type)
@@ -967,8 +1025,7 @@ def main():
     out_file = SAVED_MODELS_CONFIG["fusion_models_path"] / "fusion_final_results.json"
     out_file.parent.mkdir(parents=True, exist_ok=True)
     with open(out_file, "w") as f:
-        json_safe_results = trainer.make_json_serializable(results)
-        json.dump(json_safe_results, f, indent=2)
+        json.dump(trainer.make_json_serializable(results), f, indent=2)
     logger.info(f"Results saved to {out_file}")
 
 

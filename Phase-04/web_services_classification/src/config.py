@@ -280,18 +280,32 @@ DEEPSEEK_CONFIG = {
     }
 }
 
+# ============================================================================
+# FUSION CONFIGURATION (Single Hybrid: RoBERTa + DeepSeek)
+# ============================================================================
+
 FUSION_CONFIG = {
     'available_models': {
+        'deepseek_base': 'deepseek-ai/deepseek-llm-7b-base',
         'roberta_base': 'roberta-base'
     },
-    'model_name': 'roberta-base',  # Default model
-    'fusion_types': ['concat', 'average', 'weighted', 'gating'],
-    'num_layers_to_fuse': 4,  # Try 3, 4, 6, or 12
+    'deepseek_model': 'deepseek-ai/deepseek-llm-7b-base',  # Fixed DeepSeek model
+    'roberta_model': 'roberta-base',  # Fixed RoBERTa model
+    'fusion_types': ['concat', 'average', 'weighted', 'gating'],  # Different fusion strategies
+    'common_dim': 768,  # Common embedding dimension
     'max_length': 128,
     'num_train_epochs': 10,
-    'batch_size': 16,
-    'learning_rate': 2e-5,
+    'batch_size': 8,
+    'eval_batch_size': 16,
+    'learning_rate': 1e-5,
+    'weight_decay': 0.01,
+    'gradient_clip': 1.0,
     'dropout': 0.3,
+    'scheduler': {
+        'mode': 'max',
+        'patience': 2,
+        'factor': 0.5
+    }
 }
 
 def create_all_directories():
