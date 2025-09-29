@@ -650,8 +650,7 @@ class RoBERTaFusionTrainer:
                 optimizer,
                 mode=scheduler_config.get('mode', 'max'),
                 patience=scheduler_config.get('patience', 2),
-                factor=scheduler_config.get('factor', 0.5),
-                verbose=scheduler_config.get('verbose', True)
+                factor=scheduler_config.get('factor', 0.5)
             )
             
             # Training history
