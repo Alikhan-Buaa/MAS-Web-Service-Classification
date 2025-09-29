@@ -216,7 +216,23 @@ class RoBERTaFusionTrainer:
     def __init__(self):
         self.tokenizer = None
         self.model = None
-        self.config = FUSION_CONFIG
+        
+        # Copy config and add missing values with defaults if not present
+        self.config = FUSION_CONFIG.copy()
+        if 'weight_decay' not in self.config:
+            self.config['weight_decay'] = 0.01
+        if 'eval_batch_size' not in self.config:
+            self.config['eval_batch_size'] = 32
+        if 'gradient_clip' not in self.config:
+            self.config['gradient_clip'] = 1.0
+        if 'scheduler' not in self.config:
+            self.config['scheduler'] = {
+                'mode': 'max',
+                'patience': 2,
+                'factor': 0.5,
+                'verbose': True
+            }
+        
         self.evaluator = ModelEvaluator()
         
         # Configure GPU
