@@ -281,7 +281,10 @@ DEEPSEEK_CONFIG = {
 }
 
 FUSION_CONFIG = {
-    'roberta_model': 'roberta-base',  # or 'roberta-large'
+    'available_models': {
+        'roberta_base': 'roberta-base'
+    },
+    'model_name': 'roberta-base',  # Default model
     'fusion_types': ['concat', 'average', 'weighted', 'gating'],
     'num_layers_to_fuse': 4,  # Try 3, 4, 6, or 12
     'max_length': 128,
