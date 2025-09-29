@@ -26,7 +26,7 @@ from src.evaluation.evaluate import ModelEvaluator
 from src.evaluation.overall_comparison import OverallPerformanceAnalyzer
 from src.modeling.bert_models import RoBERTaModelTrainer
 from src.modeling.deepseek_models import DeepSeekModelTrainer
-from src.modeling.roberta_fusion_model import RoBERTaFusionTrainer
+from src.modeling.fusion_models import DeepSeekRoBERTaFusionTrainer
 from src.utils.utils import setup_logging, get_timestamp
 
 
@@ -370,7 +370,7 @@ class PipelineManager:
         start_time = self.log_phase_start(phase_name)
         
         try:
-            fusion_trainer = RoBERTaFusionTrainer()
+            fusion_trainer = DeepSeekRoBERTaFusionTrainer()
             results = fusion_trainer.train_all_categories()
             
             # Extract summary statistics safely
@@ -385,7 +385,7 @@ class PipelineManager:
             
             self.results[phase_name] = {
                 'status': 'completed',
-                'summary': f'Trained {total_models} RoBERTa Fusion models',
+                'summary': f'Trained {total_models}  Fusion models',
                 'fusion_types': fusion_types,
                 'categories_processed': CATEGORY_SIZES,
                 'pickle_file': str(RESULTS_CONFIG["fusion_comparisons_path"] / "fusion_final_results.pkl")
