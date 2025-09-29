@@ -26,6 +26,7 @@ from src.evaluation.evaluate import ModelEvaluator
 from src.evaluation.overall_comparison import OverallPerformanceAnalyzer
 from src.modeling.bert_models import RoBERTaModelTrainer
 from src.modeling.deepseek_models import DeepSeekModelTrainer
+from src.modeling.roberta_fusion_model import RoBERTaFusionTrainer
 from src.utils.utils import setup_logging, get_timestamp
 
 
@@ -363,6 +364,44 @@ class PipelineManager:
             self.log_phase_end(phase_name, start_time, success=False, error=e)
             raise
 
+    def run_fusion_training_phase(self):
+        """Run RoBERTa Fusion model training phase with enhanced logging"""
+        phase_name = "fusion_training"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            fusion_trainer = RoBERTaFusionTrainer()
+            results = fusion_trainer.train_all_categories()
+            
+            # Extract summary statistics safely
+            fusion_types = []
+            total_models = 0
+            
+            if results and isinstance(results, dict):
+                for fusion_key, fusion_results in results.items():
+                    fusion_types.append(fusion_key)
+                    if isinstance(fusion_results, dict):
+                        total_models += len(fusion_results)
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'summary': f'Trained {total_models} RoBERTa Fusion models',
+                'fusion_types': fusion_types,
+                'categories_processed': CATEGORY_SIZES,
+                'pickle_file': str(RESULTS_CONFIG["fusion_comparisons_path"] / "fusion_final_results.pkl")
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            return results
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'error': str(e)
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
     def run_deepseek_training_phase(self):
         """Run DeepSeek model training phase with enhanced logging"""
         phase_name = "deepseek_training"
@@ -412,6 +451,7 @@ class PipelineManager:
                 'ml_analysis': False,
                 'dl_analysis': False,
                 'bert_analysis': False,
+                'fusion_analysis': False,
                 'deepseek_analysis': False
             }
             
@@ -420,6 +460,7 @@ class PipelineManager:
                 ('ml', RESULTS_CONFIG["ml_comparisons_path"]),
                 ('dl', RESULTS_CONFIG["dl_comparisons_path"]),
                 ('bert', RESULTS_CONFIG["bert_comparisons_path"]),
+                ('fusion', RESULTS_CONFIG["fusion_comparisons_path"]),
                 ('deepseek', RESULTS_CONFIG["deepseek_comparisons_path"])
             ]
             
@@ -458,6 +499,7 @@ class PipelineManager:
             }
             self.log_phase_end(phase_name, start_time, success=False, error=e)
             raise
+
 
     def run_visualize_phase(self):
         """Run overall performance visualization phase with enhanced logging"""
@@ -540,6 +582,7 @@ class PipelineManager:
         print(f"  - ML results: results/ml/comparisons/")
         print(f"  - DL results: results/dl/comparisons/")
         print(f"  - BERT results: results/bert/comparisons/")
+        print(f"  - Fusion results: results/fusion/comparisons/")
         print(f"  - DeepSeek results: results/deepseek/comparisons/")
         print(f"  - Overall results: results/overall/")
         print(f"  - Individual category results: results/*/top_*_categories/")
@@ -554,7 +597,8 @@ def main():
         "--phase", 
         choices=[
             "all", "analysis", "preprocessing", "features", "ml_training", 
-            "dl_training", "bert_training", "deepseek_training", "evaluation", "visualize", "benchmarks"
+            "dl_training", "bert_training", "fusion_training", "deepseek_training", 
+            "evaluation", "visualize", "benchmarks"
         ],
         default="all",
         help="Which phase to run"
@@ -590,6 +634,7 @@ def main():
             pipeline.run_ml_training_phase()
             pipeline.run_dl_training_phase()
             pipeline.run_bert_training_phase()
+            pipeline.run_fusion_training_phase()
             pipeline.run_deepseek_training_phase()
             pipeline.run_evaluation_phase()
             pipeline.run_visualize_phase()
@@ -606,6 +651,8 @@ def main():
             pipeline.run_dl_training_phase()
         elif args.phase == "bert_training":
             pipeline.run_bert_training_phase()
+        elif args.phase == "fusion_training":
+            pipeline.run_fusion_training_phase()
         elif args.phase == "deepseek_training":            
             pipeline.run_deepseek_training_phase()
         elif args.phase == "evaluation":
