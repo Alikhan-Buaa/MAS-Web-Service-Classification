@@ -226,6 +226,8 @@ class ModelEvaluator:
                 comparisons_path = RESULTS_CONFIG['bert_comparisons_path']
             elif model_type == 'deepseek':
                 comparisons_path = RESULTS_CONFIG['deepseek_comparisons_path']
+            elif model_type == 'fusion':  # ✓ ADD THIS
+                comparisons_path = RESULTS_CONFIG['fusion_comparisons_path']
             else:
                 return  # Skip if unknown type
             

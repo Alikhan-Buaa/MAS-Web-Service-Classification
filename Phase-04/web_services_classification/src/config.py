@@ -19,6 +19,14 @@ RANDOM_SEED = 42
 # Category sizes to process
 CATEGORY_SIZES = [50]
 
+MODEL_TYPES = {
+    'ml': 'ml',
+    'dl': 'dl',
+    'bert': 'bert',
+    'roberta': 'bert',  # RoBERTa uses BERT directories
+    'deepseek': 'deepseek',
+    'fusion': 'fusion'
+}
 # Logging configuration
 LOGGING_CONFIG = {
     'level': 'INFO',
@@ -147,6 +155,7 @@ SAVED_MODELS_CONFIG = {
 
 # ML Models configuration
 ML_CONFIG = {
+    'model_type': 'ml',  # ← Added
     'models': ['LogisticRegression', 'RandomForest', 'XGBoost'],
     'logistic_regression': {
         'max_iter': 1000,
@@ -167,6 +176,7 @@ ML_CONFIG = {
 
 # DL Models configuration
 DL_CONFIG = {
+    'model_type': 'dl',  # ← Added
     'models': ['BiLSTM'],
     'feature_types': ['tfidf', 'sbert'],
     'bilstm': {
@@ -200,11 +210,8 @@ DL_CONFIG = {
 
 # BERT Models configuration
 BERT_CONFIG = {
-    'available_models': {
-        'roberta_base': 'roberta-base',
-        'roberta_large': 'roberta-large'
-    },
-    'model_name': 'roberta-base',  # Default model
+    'model_type': 'bert',  # ← Added
+    'models': ['roberta-base','roberta-large'],
     'max_length': 512,
     'num_train_epochs': 3,
     'eval_strategy': 'epoch',
@@ -234,10 +241,8 @@ BERT_CONFIG = {
 
 # DeepSeek Models configuration
 DEEPSEEK_CONFIG = {
-    'available_models': {
-        'deepseek_7b_base': 'deepseek-ai/deepseek-llm-7b-base'
-    },
-    'model_name': 'deepseek-ai/deepseek-llm-7b-base',  # Default model
+    'model_type': 'deepseek',  # ← Added
+    'models': [ 'deepseek-ai/deepseek-llm-7b-base'],
     'trust_remote_code': True,
     'max_length': 512,
     'padding': 'max_length',
@@ -285,12 +290,10 @@ DEEPSEEK_CONFIG = {
 # ============================================================================
 
 FUSION_CONFIG = {
-    'available_models': {
-        'deepseek_base': 'deepseek-ai/deepseek-llm-7b-base',
-        'roberta_base': 'roberta-base'
-    },
-    'deepseek_model': 'deepseek-ai/deepseek-llm-7b-base',  # Fixed DeepSeek model
-    'roberta_model': 'roberta-base',  # Fixed RoBERTa model
+    'model_type': 'fusion',
+    'models': ['deepseek-ai/deepseek-llm-7b-base','roberta-base'],
+    'deepseek_model': 'deepseek-ai/deepseek-llm-7b-base',
+    'roberta_model': 'roberta-base',
     'fusion_types': ['concat', 'average', 'weighted', 'gating'],  # Different fusion strategies
     'common_dim': 768,  # Common embedding dimension
     'max_length': 128,
@@ -306,6 +309,69 @@ FUSION_CONFIG = {
         'patience': 2,
         'factor': 0.5
     }
+}
+
+
+# ============================================================================
+# FILE NAMING STANDARDS AND MODEL/FEATURE MAPPINGS
+# ============================================================================
+
+# Model name standardization mapping
+MODEL_NAME_MAPPING = {
+    # ML Models
+    'logistic_regression': 'LogisticRegression',
+    'LogisticRegression': 'LogisticRegression',
+    'random_forest': 'RandomForest',
+    'RandomForest': 'RandomForest',
+    'xgboost': 'XGBoost',
+    'XGBoost': 'XGBoost',
+    
+    # DL Models
+    'bilstm': 'BiLSTM',
+    'BiLSTM': 'BiLSTM',
+    
+    # BERT Models
+    'roberta_base': 'RoBERTa_Base',
+    'RoBERTa_Base': 'RoBERTa_Base',
+    'roberta-base': 'RoBERTa_Base',
+    'roberta_large': 'RoBERTa_Large',
+    'RoBERTa_Large': 'RoBERTa_Large',
+    'roberta-large': 'RoBERTa_Large',
+    
+    # DeepSeek Models
+    'deepseek_7b_base': 'DeepSeek_7B_Base',
+    'DeepSeek_7B_Base': 'DeepSeek_7B_Base',
+    'deepseek-ai/deepseek-llm-7b-base': 'DeepSeek_7B_Base',
+    
+    # Fusion Models
+    'deepseek_roberta_fusion_concat': 'DeepSeek_RoBERTa_Fusion_Concat',
+    'deepseek_roberta_fusion_average': 'DeepSeek_RoBERTa_Fusion_Average',
+    'deepseek_roberta_fusion_weighted': 'DeepSeek_RoBERTa_Fusion_Weighted',
+    'deepseek_roberta_fusion_gating': 'DeepSeek_RoBERTa_Fusion_Gating',
+    'DeepSeek-RoBERTa-Fusion-Concat': 'DeepSeek_RoBERTa_Fusion_Concat',
+    'DeepSeek-RoBERTa-Fusion-Average': 'DeepSeek_RoBERTa_Fusion_Average',
+    'DeepSeek-RoBERTa-Fusion-Weighted': 'DeepSeek_RoBERTa_Fusion_Weighted',
+    'DeepSeek-RoBERTa-Fusion-Gating': 'DeepSeek_RoBERTa_Fusion_Gating',
+}
+
+# Feature type standardization mapping
+FEATURE_NAME_MAPPING = {
+    'tfidf': 'TFIDF',
+    'TFIDF': 'TFIDF',
+    'sbert': 'SBERT',
+    'SBERT': 'SBERT',
+    'raw_text': 'RawText',
+    'RawText': 'RawText',
+    # Fusion feature types - simplified names
+    'concat': 'Concat',
+    'average': 'Average',
+    'weighted': 'Weighted',
+    'gating': 'Gating',
+    # Keep old mappings for backward compatibility
+    'deepseek_roberta_fusion_concat': 'Concat',
+    'deepseek_roberta_fusion_average': 'Average',
+    'deepseek_roberta_fusion_weighted': 'Weighted',
+    'deepseek_roberta_fusion_gating': 'Gating',
 }
 
 def create_all_directories():
