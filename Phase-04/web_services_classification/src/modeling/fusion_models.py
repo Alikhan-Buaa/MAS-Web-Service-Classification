@@ -1,6 +1,7 @@
 """
 DeepSeek-RoBERTa Fusion Models for Web Service Classification
 Combines embeddings from DeepSeek and RoBERTa with multiple fusion strategies
+BASE MODELS ARE FROZEN - Only fusion layers and classifier are trained
 """
 
 import pandas as pd
@@ -22,7 +23,7 @@ from transformers import AutoTokenizer, AutoModel, RobertaTokenizer, RobertaMode
 
 # Import configuration and utilities
 from src.config import (
-    CATEGORY_SIZES, SAVED_MODELS_CONFIG, DEEPSEEK_ROBERTA_FUSION_CONFIG,
+    CATEGORY_SIZES, SAVED_MODELS_CONFIG, FUSION_CONFIG,
     PREPROCESSING_CONFIG, RANDOM_SEED, RESULTS_CONFIG
 )
 from src.evaluation.evaluate import ModelEvaluator
@@ -41,13 +42,14 @@ if torch.cuda.is_available():
 
 
 # ============================================================================
-# DEEPSEEK-ROBERTA FUSION MODEL ARCHITECTURE
+# DEEPSEEK-ROBERTA FUSION MODEL ARCHITECTURE (FROZEN BASE MODELS)
 # ============================================================================
 
 class DeepSeekRoBERTaFusionModel(nn.Module):
     """
     Fusion model combining DeepSeek and RoBERTa embeddings
     Supports: concatenation, averaging, weighted, and gating fusion
+    BASE MODELS ARE FROZEN - Only fusion + classifier layers are trained
     """
     
     def __init__(self, config, num_labels):
@@ -74,16 +76,36 @@ class DeepSeekRoBERTaFusionModel(nn.Module):
         self.roberta = RobertaModel.from_pretrained(roberta_model_name)
         self.roberta_hidden_size = self.roberta.config.hidden_size
         
+        # ============================================================
+        # FREEZE BASE MODELS - Only train fusion + classifier layers
+        # ============================================================
+        logger.info("Freezing DeepSeek base model...")
+        for param in self.deepseek.parameters():
+            param.requires_grad = False
+        
+        logger.info("Freezing RoBERTa base model...")
+        for param in self.roberta.parameters():
+            param.requires_grad = False
+        
+        # Set models to eval mode to disable dropout in base models
+        self.deepseek.eval()
+        self.roberta.eval()
+        
+        logger.info("✓ Base models frozen - only fusion layers and classifier will be trained")
+        # ============================================================
+        
         # Projection layers to common dimension if sizes differ
         self.common_dim = config.get('common_dim', 768)
         
         if self.deepseek_hidden_size != self.common_dim:
             self.deepseek_proj = nn.Linear(self.deepseek_hidden_size, self.common_dim)
+            logger.info(f"DeepSeek projection: {self.deepseek_hidden_size} -> {self.common_dim}")
         else:
             self.deepseek_proj = nn.Identity()
         
         if self.roberta_hidden_size != self.common_dim:
             self.roberta_proj = nn.Linear(self.roberta_hidden_size, self.common_dim)
+            logger.info(f"RoBERTa projection: {self.roberta_hidden_size} -> {self.common_dim}")
         else:
             self.roberta_proj = nn.Identity()
         
@@ -128,40 +150,53 @@ class DeepSeekRoBERTaFusionModel(nn.Module):
         # Temperature for calibration
         self.temperature = nn.Parameter(torch.ones(1))
         
-        logger.info(f"Fusion type: {self.fusion_type}, Fused dim: {fused_dim}")
+        # Count trainable vs frozen parameters
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        frozen_params = sum(p.numel() for p in self.parameters() if not p.requires_grad)
+        total_params = trainable_params + frozen_params
+        
+        logger.info(f"Fusion type: {self.fusion_type}, Fused dimension: {fused_dim}")
+        logger.info(f"Parameter breakdown:")
+        logger.info(f"  Trainable: {trainable_params:,} ({100*trainable_params/total_params:.2f}%)")
+        logger.info(f"  Frozen: {frozen_params:,} ({100*frozen_params/total_params:.2f}%)")
+        logger.info(f"  Total: {total_params:,}")
     
     def extract_deepseek_embedding(self, input_ids, attention_mask):
         """Extract DeepSeek embedding with mean pooling"""
-        outputs = self.deepseek(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=False
-        )
+        # Use torch.no_grad() since base model is frozen - no gradient computation needed
+        with torch.no_grad():
+            outputs = self.deepseek(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=False
+            )
+            
+            # Mean pooling over sequence length
+            last_hidden_state = outputs.last_hidden_state
+            mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+            sum_embeddings = torch.sum(last_hidden_state * mask_expanded, 1)
+            sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+            pooled = sum_embeddings / sum_mask
         
-        # Mean pooling over sequence length
-        last_hidden_state = outputs.last_hidden_state
-        mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
-        sum_embeddings = torch.sum(last_hidden_state * mask_expanded, 1)
-        sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
-        pooled = sum_embeddings / sum_mask
-        
-        # Project to common dimension
+        # Project to common dimension (this is trainable)
         projected = self.deepseek_proj(pooled.float())
         
         return projected
     
     def extract_roberta_embedding(self, input_ids, attention_mask):
         """Extract RoBERTa embedding (CLS token)"""
-        outputs = self.roberta(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=False
-        )
+        # Use torch.no_grad() since base model is frozen - no gradient computation needed
+        with torch.no_grad():
+            outputs = self.roberta(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=False
+            )
+            
+            # Use CLS token
+            cls_embedding = outputs.last_hidden_state[:, 0, :]
         
-        # Use CLS token
-        cls_embedding = outputs.last_hidden_state[:, 0, :]
-        
-        # Project to common dimension
+        # Project to common dimension (this is trainable)
         projected = self.roberta_proj(cls_embedding)
         
         return projected
@@ -190,20 +225,28 @@ class DeepSeekRoBERTaFusionModel(nn.Module):
     def forward(self, deepseek_input_ids, deepseek_attention_mask, 
                 roberta_input_ids, roberta_attention_mask, apply_temperature=False):
         """Forward pass through fusion model"""
-        # Extract embeddings from both models
+        # Extract embeddings from both models (frozen - no gradients)
         deepseek_emb = self.extract_deepseek_embedding(deepseek_input_ids, deepseek_attention_mask)
         roberta_emb = self.extract_roberta_embedding(roberta_input_ids, roberta_attention_mask)
         
-        # Fuse embeddings
+        # Fuse embeddings (trainable)
         fused_emb = self.fuse_embeddings(deepseek_emb, roberta_emb)
         
-        # Classification
+        # Classification (trainable)
         logits = self.classifier(fused_emb)
         
         if apply_temperature:
             logits = logits / self.temperature
         
         return logits
+    
+    def train(self, mode=True):
+        """Override train to keep base models in eval mode"""
+        super().train(mode)
+        # Always keep base models in eval mode
+        self.deepseek.eval()
+        self.roberta.eval()
+        return self
 
 
 # ============================================================================
@@ -259,7 +302,7 @@ class DeepSeekRoBERTaFusionDataset(Dataset):
 # ============================================================================
 
 class DeepSeekRoBERTaFusionTrainer:
-    """Trainer for DeepSeek-RoBERTa Fusion models"""
+    """Trainer for DeepSeek-RoBERTa Fusion models with frozen base models"""
     
     @staticmethod
     def make_json_serializable(obj):
@@ -285,7 +328,13 @@ class DeepSeekRoBERTaFusionTrainer:
         self.deepseek_tokenizer = None
         self.roberta_tokenizer = None
         self.model = None
+        
+        # Use FUSION_CONFIG from config.py
         self.config = FUSION_CONFIG.copy()
+        
+        # Get model_type from config
+        self.model_type = self.config.get('model_type', 'fusion')
+        
         self.evaluator = ModelEvaluator()
         
         # Configure GPU
@@ -300,6 +349,7 @@ class DeepSeekRoBERTaFusionTrainer:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             if torch.cuda.is_available():
                 logger.info(f"Using GPU: {torch.cuda.get_device_name()}")
+                logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
                 self.scaler = torch.cuda.amp.GradScaler()
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
@@ -417,12 +467,12 @@ class DeepSeekRoBERTaFusionTrainer:
     
     def train_epoch(self, model, dataloader, optimizer, criterion):
         """Train one epoch"""
-        model.train()
+        model.train()  # This will keep base models in eval mode due to override
         total_loss = 0
         all_preds = []
         all_labels = []
         
-        for batch in dataloader:
+        for batch_idx, batch in enumerate(dataloader):
             deepseek_input_ids = batch['deepseek_input_ids'].to(self.device)
             deepseek_attention_mask = batch['deepseek_attention_mask'].to(self.device)
             roberta_input_ids = batch['roberta_input_ids'].to(self.device)
@@ -455,6 +505,10 @@ class DeepSeekRoBERTaFusionTrainer:
             preds = torch.argmax(logits, dim=1)
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+            
+            # Log every 10 batches
+            if (batch_idx + 1) % 10 == 0:
+                logger.debug(f"Batch {batch_idx + 1}/{len(dataloader)}, Loss: {loss.item():.4f}")
         
         avg_loss = total_loss / len(dataloader)
         accuracy = accuracy_score(all_labels, all_preds)
@@ -644,17 +698,27 @@ class DeepSeekRoBERTaFusionTrainer:
             cm = confusion_matrix(y_true, y_pred)
             
             # Create visualizations
-            fusion_type = model_name.split('-')[-1].lower()
+            # MODIFIED: Simplified feature_type - Extract fusion type from standardized model name
+            # model_name format: "DeepSeek_RoBERTa_Fusion_Concat" after standardization
+            fusion_type = model_name.split('_')[-1].lower()  # Extract 'concat', 'average', 'weighted', 'gating'
+            feature_type = fusion_type  # Use simple fusion type name
+            
+            # Use self.model_type from config
             cm_plot_path = self.evaluator.generate_confusion_heatmap(
-                cm, class_labels, model_name, n_categories, f"deepseek_roberta_fusion_{fusion_type}", "deepseek_roberta_fusion"
+                cm, class_labels, model_name, n_categories, 
+                feature_type, 
+                self.model_type
             )
+            
             report_path = self.evaluator.generate_classification_report_csv(
-                y_true, y_pred, class_labels, model_name, n_categories, f"deepseek_roberta_fusion_{fusion_type}", "deepseek_roberta_fusion"
+                y_true, y_pred, class_labels, model_name, n_categories, 
+                feature_type, 
+                self.model_type
             )
             
             results = {
                 'model_name': model_name,
-                'feature_type': f'deepseek_roberta_fusion_{fusion_type}',
+                'feature_type': feature_type,
                 'n_categories': int(n_categories),
                 'top1_accuracy': float(top1_accuracy),
                 'top3_accuracy': float(top3_accuracy),
@@ -708,10 +772,10 @@ class DeepSeekRoBERTaFusionTrainer:
             # Create model
             model = self.create_model(n_categories, model_config).to(self.device)
             
-            # Training setup
-            batch_size = self.config.get('batch_size', 8)
-            eval_batch_size = self.config.get('eval_batch_size', 16)
-            learning_rate = self.config.get('learning_rate', 1e-5)
+            # Training setup - can use larger batch sizes now that base models are frozen
+            batch_size = self.config.get('batch_size', 16)  # Increased from 8
+            eval_batch_size = self.config.get('eval_batch_size', 32)  # Increased from 16
+            learning_rate = self.config.get('learning_rate', 2e-4)  # Higher LR for frozen base
             weight_decay = self.config.get('weight_decay', 0.01)
             epochs = self.config.get('num_train_epochs', 10)
             
@@ -719,7 +783,9 @@ class DeepSeekRoBERTaFusionTrainer:
             val_loader = DataLoader(val_dataset, batch_size=eval_batch_size, shuffle=False, num_workers=0)
             test_loader = DataLoader(test_dataset, batch_size=eval_batch_size, shuffle=False, num_workers=0)
             
-            optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+            # Only optimize trainable parameters (fusion + classifier)
+            trainable_params = [p for p in model.parameters() if p.requires_grad]
+            optimizer = torch.optim.AdamW(trainable_params, lr=learning_rate, weight_decay=weight_decay)
             criterion = nn.CrossEntropyLoss()
             
             scheduler_config = self.config.get('scheduler', {})
@@ -735,14 +801,21 @@ class DeepSeekRoBERTaFusionTrainer:
             best_val_acc = 0.0
             best_model_state = None
             
-            print(f"\nTraining {model_name} on top_{n_categories}_categories...")
+            print(f"\n{'='*80}")
+            print(f"Training {model_name} on top_{n_categories}_categories")
+            print(f"{'='*80}")
             print(f"Fusion type: {fusion_type}")
+            print(f"Base models: FROZEN (only training fusion + classifier layers)")
             print(f"Batch size: Train={batch_size}, Eval={eval_batch_size}")
             print(f"Learning rate: {learning_rate}")
+            print(f"Epochs: {epochs}")
+            print(f"{'='*80}\n")
             
             start_time = time.time()
             
             for epoch in range(epochs):
+                epoch_start = time.time()
+                
                 train_loss, train_acc = self.train_epoch(model, train_loader, optimizer, criterion)
                 val_loss, val_acc, _, _, _ = self.evaluate_epoch(model, val_loader, criterion)
                 
@@ -754,7 +827,9 @@ class DeepSeekRoBERTaFusionTrainer:
                 scheduler.step(val_acc)
                 current_lr = optimizer.param_groups[0]['lr']
                 
-                print(f"Epoch {epoch+1}/{epochs}:")
+                epoch_time = time.time() - epoch_start
+                
+                print(f"Epoch {epoch+1}/{epochs} ({epoch_time:.1f}s):")
                 print(f"  Train - Loss: {train_loss:.4f}, Acc: {train_acc:.4f}")
                 print(f"  Val   - Loss: {val_loss:.4f}, Acc: {val_acc:.4f}")
                 print(f"  LR: {current_lr:.2e}")
@@ -766,7 +841,7 @@ class DeepSeekRoBERTaFusionTrainer:
                 print()
             
             training_time = time.time() - start_time
-            logger.info(f"Training completed in {training_time:.2f} seconds")
+            logger.info(f"Training completed in {training_time:.2f} seconds ({training_time/60:.1f} minutes)")
             
             # Load best model
             model.load_state_dict(best_model_state)
@@ -775,8 +850,9 @@ class DeepSeekRoBERTaFusionTrainer:
             model_dir = SAVED_MODELS_CONFIG['fusion_models_path'] / f'top_{n_categories}_categories'
             model_dir.mkdir(parents=True, exist_ok=True)
             
+            # MODIFIED: Simplified feature_type for model filename
             model_filename = FileNamingStandard.generate_model_filename(
-                model_name, f'deepseek_roberta_fusion_{fusion_type}', n_categories, 'model'
+                model_name, fusion_type, n_categories, 'model'
             )
             model_path = model_dir / model_filename
             
@@ -784,7 +860,8 @@ class DeepSeekRoBERTaFusionTrainer:
                 'model_state_dict': model.state_dict(),
                 'fusion_type': fusion_type,
                 'n_categories': n_categories,
-                'config': model_config
+                'config': model_config,
+                'best_val_acc': best_val_acc
             }, model_path)
             logger.info(f"Model saved to {model_path}")
             
@@ -803,17 +880,18 @@ class DeepSeekRoBERTaFusionTrainer:
             eval_results['training_history_plot'] = history_plot_path
             eval_results['batch_size'] = batch_size
             eval_results['learning_rate'] = learning_rate
+            eval_results['best_val_acc'] = float(best_val_acc)
             
-            # Print metrics
+            # MODIFIED: Simplified feature_type for metrics printing
             self.evaluator.print_model_metrics(
                 eval_results, display_name, n_categories, 
-                f"deepseek_roberta_fusion_{fusion_type}", training_time, "DeepSeek-RoBERTa Fusion"
+                fusion_type, training_time, "DeepSeek-RoBERTa Fusion"
             )
             
-            # Save performance data
+            # MODIFIED: Simplified feature_type and model_type for saving
             self.evaluator.save_model_performance_data(
                 eval_results, display_name, n_categories, 
-                f"deepseek_roberta_fusion_{fusion_type}", "deepseek_roberta_fusion"
+                fusion_type, "fusion"
             )
             
             return eval_results
@@ -822,6 +900,10 @@ class DeepSeekRoBERTaFusionTrainer:
             logger.error(f"Error training {fusion_type} fusion for {n_categories} categories: {e}")
             logger.error(traceback.format_exc())
             raise
+        finally:
+            # Clean up GPU memory
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     
     def save_results_for_overall_analysis(self, all_results):
         """Save results for overall analysis - compatible with ML/DL/BERT format"""
@@ -874,10 +956,11 @@ class DeepSeekRoBERTaFusionTrainer:
         
         print(f"\n{'='*80}")
         print(f"STARTING DEEPSEEK-ROBERTA FUSION MODEL TRAINING PIPELINE")
+        print(f"BASE MODELS FROZEN - Only training fusion + classifier layers")
         print(f"{'='*80}")
         print(f"Category sizes: {categories}")
         print(f"Fusion types: {self.config.get('fusion_types', ['concat', 'average', 'weighted', 'gating'])}")
-        print(f"{'='*80}")
+        print(f"{'='*80}\n")
         
         for fusion_type in self.config.get('fusion_types', ['concat', 'average', 'weighted', 'gating']):
             print(f"\n{'-'*60}")
@@ -955,6 +1038,7 @@ class DeepSeekRoBERTaFusionTrainer:
                         result['training_time']
                     ))
                 
+                # Sort by macro F1 score
                 fusion_scores.sort(key=lambda x: x[4], reverse=True)
                 
                 for fusion_type, top1, top3, top5, f1, time_taken in fusion_scores:
@@ -985,7 +1069,7 @@ def main():
     """Main function to run DeepSeek-RoBERTa Fusion training"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="DeepSeek-RoBERTa Fusion Model Training")
+    parser = argparse.ArgumentParser(description="DeepSeek-RoBERTa Fusion Model Training (Frozen Base Models)")
     parser.add_argument("--fusion-type", type=str, default="all",
                        choices=["concat", "average", "weighted", "gating", "all"],
                        help="Fusion type to train")
@@ -999,6 +1083,11 @@ def main():
                        help="Learning rate")
     
     args = parser.parse_args()
+    
+    print(f"\n{'='*80}")
+    print(f"DeepSeek-RoBERTa Fusion Training")
+    print(f"BASE MODELS FROZEN - Only training fusion + classifier layers")
+    print(f"{'='*80}\n")
     
     trainer = DeepSeekRoBERTaFusionTrainer()
     
@@ -1019,7 +1108,8 @@ def main():
         logger.info(f"Training single fusion type: {args.fusion_type}")
         results = {}
         for n_categories in args.categories:
-            results[n_categories] = trainer.train_model_on_category(n_categories, args.fusion_type)
+            result = trainer.train_model_on_category(n_categories, args.fusion_type)
+            results[n_categories] = result
     
     # Save final results
     out_file = SAVED_MODELS_CONFIG["fusion_models_path"] / "fusion_final_results.json"
@@ -1027,6 +1117,11 @@ def main():
     with open(out_file, "w") as f:
         json.dump(trainer.make_json_serializable(results), f, indent=2)
     logger.info(f"Results saved to {out_file}")
+    
+    print(f"\n{'='*80}")
+    print(f"TRAINING COMPLETE!")
+    print(f"Results saved to: {out_file}")
+    print(f"{'='*80}\n")
 
 
 if __name__ == "__main__":

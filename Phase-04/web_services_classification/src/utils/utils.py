@@ -19,13 +19,18 @@ import sys
 # Add config to path
 sys.path.append(str(Path(__file__).parent.parent))
 try:
-    from config import LOGGING_CONFIG, DATA_CONFIG, RESULTS_CONFIG
+    from config import (
+        LOGGING_CONFIG, DATA_CONFIG, RESULTS_CONFIG,
+        MODEL_NAME_MAPPING, FEATURE_NAME_MAPPING  # ← Import mappings from config
+    )
 except ImportError:
     # Fallback if config import fails
     LOGGING_CONFIG = {
         'format': '%(asctime)s - %(levelname)s - %(message)s',
         'handlers': {'console': True, 'file': True}
     }
+    MODEL_NAME_MAPPING = {}
+    FEATURE_NAME_MAPPING = {}
 
 
 def setup_logging(log_file: Optional[Path] = None, 
@@ -261,61 +266,79 @@ def print_section_header(title: str, char: str = "=", width: int = 80) -> None:
 
 
 class FileNamingStandard:
-    """Standardized file naming conventions across all model types"""
+    """
+    Standardized file naming conventions across all model types
+    Uses mappings from config.py for consistency
+    """
     
     @staticmethod
     def standardize_model_name(model_name):
-        """Convert model name to standard format"""
-        # Handle specific model name mappings
-        name_mappings = {
-            'RoBERTa-Base': 'RoBERTa_Base',
-            'RoBERTa-Large': 'RoBERTa_Large', 
-            'DeepSeek-7B-Base': 'DeepSeek_7B_Base',
-            'Random Forest': 'RandomForest',
-            'Logistic Regression': 'LogisticRegression',
-            'Support Vector Machine': 'SVM',
-            'Naive Bayes': 'NaiveBayes',
-            'XGBoost': 'XGBoost',
-            'Bi-LSTM': 'BiLSTM',
-            'BiLSTM': 'BiLSTM',
-            'Text CNN': 'TextCNN',
-            'LogisticRegression': 'LogisticRegression',  # Already clean
-            'RandomForest': 'RandomForest',  # Already clean
-        }
+        """
+        Convert model name to standard format using config mappings
+        Falls back to generic cleaning if not in mapping
+        """
+        # Try to get from config mapping first
+        if model_name in MODEL_NAME_MAPPING:
+            return MODEL_NAME_MAPPING[model_name]
         
-        # Use mapping if available, otherwise clean the name
-        if model_name in name_mappings:
-            return name_mappings[model_name]
-        else:
-            # Generic cleaning: remove special chars, replace spaces/hyphens with underscores
-            clean_name = model_name.replace(' ', '_').replace('-', '_')
-            # Remove any remaining special characters except underscores
-            clean_name = ''.join(c for c in clean_name if c.isalnum() or c == '_')
-            return clean_name
+        # Fallback: Generic cleaning
+        clean_name = model_name.replace(' ', '_').replace('-', '_')
+        clean_name = ''.join(c for c in clean_name if c.isalnum() or c == '_')
+        return clean_name
+    
+    @staticmethod
+    def standardize_feature_name(feature_type):
+        """
+        Convert feature type to standard format using config mappings
+        Falls back to uppercase if not in mapping
+        """
+        # Try to get from config mapping first
+        if feature_type in FEATURE_NAME_MAPPING:
+            return FEATURE_NAME_MAPPING[feature_type]
+        
+        # Fallback: Convert to uppercase
+        return feature_type.upper()
     
     @staticmethod
     def generate_confusion_matrix_filename(model_name, feature_type, n_categories, file_format='png'):
         """Generate standardized confusion matrix filename"""
         clean_model = FileNamingStandard.standardize_model_name(model_name)
-        return f"{clean_model}_{feature_type}_top_{n_categories}_categories_confusion_matrix.{file_format}"
+        clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
+        return f"{clean_model}_{clean_feature}_confusion_matrix_top_{n_categories}_categories.{file_format}"
     
     @staticmethod
     def generate_classification_report_filename(model_name, feature_type, n_categories, file_format='csv'):
         """Generate standardized classification report filename"""
         clean_model = FileNamingStandard.standardize_model_name(model_name)
-        return f"{clean_model}_{feature_type}_top_{n_categories}_categories_classification_report.{file_format}"
+        clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
+        return f"{clean_model}_{clean_feature}_classification_report_top_{n_categories}_categories.{file_format}"
     
     @staticmethod
     def generate_training_history_filename(model_name, n_categories, file_format='png'):
         """Generate standardized training history filename"""
         clean_model = FileNamingStandard.standardize_model_name(model_name)
-        return f"{clean_model}_top_{n_categories}_categories_training_history.{file_format}"
+        return f"{clean_model}_training_history_top_{n_categories}_categories.{file_format}"
     
     @staticmethod
-    def generate_model_filename(model_name, feature_type, n_categories, file_format='pkl'):
+    def generate_model_filename(model_name, feature_type, n_categories, file_format='pth'):
         """Generate standardized model filename"""
         clean_model = FileNamingStandard.standardize_model_name(model_name)
-        return f"{clean_model}_{feature_type}_top_{n_categories}_categories.{file_format}"
+        clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
+        return f"{clean_model}_{clean_feature}_model_top_{n_categories}_categories.{file_format}"
+    
+    @staticmethod
+    def generate_metrics_filename(model_name, feature_type, n_categories, file_format='json'):
+        """Generate standardized metrics filename"""
+        clean_model = FileNamingStandard.standardize_model_name(model_name)
+        clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
+        return f"{clean_model}_{clean_feature}_metrics_top_{n_categories}_categories.{file_format}"
+    
+    @staticmethod
+    def generate_config_filename(model_name, feature_type, n_categories, file_format='json'):
+        """Generate standardized config filename"""
+        clean_model = FileNamingStandard.standardize_model_name(model_name)
+        clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
+        return f"{clean_model}_{clean_feature}_config_top_{n_categories}_categories.{file_format}"
 
 
 # Export commonly used functions

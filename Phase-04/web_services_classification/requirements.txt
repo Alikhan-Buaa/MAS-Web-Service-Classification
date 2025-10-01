@@ -27,7 +27,8 @@ scipy==1.15.3
 # Deep Learning
 tensorflow==2.15.0
 keras>=2.15.0
-torch==2.8.0
+torch 
+torchvision
 
 # NLP and Transformers
 nltk==3.8
