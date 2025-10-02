@@ -212,6 +212,10 @@ DL_CONFIG = {
 BERT_CONFIG = {
     'model_type': 'bert',  # ← Added
     'models': ['roberta-base','roberta-large'],
+    'available_models': {
+        'roberta_base': 'roberta-base',
+        'roberta_large': 'roberta-large'
+    },
     'max_length': 512,
     'num_train_epochs': 3,
     'eval_strategy': 'epoch',
