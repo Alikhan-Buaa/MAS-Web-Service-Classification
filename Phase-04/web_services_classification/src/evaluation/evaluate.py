@@ -513,7 +513,12 @@ class ModelEvaluator:
             "logistic_regression": "LogisticRegression",
             "random_forest": "RandomForest",        
             "xgboost": "XGBoost",
-            "bilstm": "BiLSTM"
+            "bilstm": "BiLSTM",
+            # Fusion models
+            "deepseek_roberta_fusion_concat": "DeepSeek_RoBERTa_Fusion_Concat",
+            "deepseek_roberta_fusion_average": "DeepSeek_RoBERTa_Fusion_Average",
+            "deepseek_roberta_fusion_weighted": "DeepSeek_RoBERTa_Fusion_Weighted",
+            "deepseek_roberta_fusion_gating": "DeepSeek_RoBERTa_Fusion_Gating"
         }
         
         # Get model configuration based on type
@@ -557,6 +562,13 @@ class ModelEvaluator:
             save_dir = RESULTS_CONFIG["deepseek_comparisons_path"]
             title_prefix = "DeepSeek Models"
             feature_types = ["raw_text"]
+        elif model_type.lower() == "fusion":
+            models = ["DeepSeek_RoBERTa_Fusion_Concat", "DeepSeek_RoBERTa_Fusion_Average", 
+                      "DeepSeek_RoBERTa_Fusion_Weighted", "DeepSeek_RoBERTa_Fusion_Gating"]
+            results_paths = RESULTS_CONFIG["fusion_category_paths"]
+            save_dir = RESULTS_CONFIG["fusion_comparisons_path"]
+            title_prefix = "Fusion Models"
+            feature_types = ["concat", "average", "weighted", "gating"]
         else:
             logger.warning(f"Unknown model type: {model_type}")
             return
