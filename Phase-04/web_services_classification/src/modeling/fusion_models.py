@@ -1055,10 +1055,34 @@ class DeepSeekRoBERTaFusionTrainer:
                     print(f"  Relative improvement: {(improvement/worst_f1)*100:+.2f}%")
         
         print(f"{'='*80}")
+        
     
     def train_all_categories(self):
         """Train all fusion models on all categories"""
-        return self.train_fusion_models()
+        self.train_fusion_models()
+        # Generate visualizations
+        print(f"\n{'='*80}")
+        print(f"GENERATING FUSION VISUALIZATIONS")
+        print(f"{'='*80}")
+        try:
+            print("Generating line plots, bar plots, and summary statistics...")
+            self.plot_fusion_results_only()
+            print("Generating radar plots...")
+            self.generate_fusion_radar_plots_only()
+            print("All Fusion visualizations completed successfully!")
+        except Exception as e:
+            logger.error(f"Error generating Fusion visualizations: {e}")
+            print(f"Warning: Some visualizations may not have been generated due to errors.")
+    
+    def plot_fusion_results_only(self):
+        """Generate Fusion comparison plots"""
+        results_file_path = RESULTS_CONFIG["fusion_comparisons_path"] / "fusion_final_results.pkl"
+        charts_dir = RESULTS_CONFIG["fusion_comparisons_path"] / "charts"
+        self.evaluator.plot_results_comparison(results_file_path, charts_dir, "fusion")
+
+    def generate_fusion_radar_plots_only(self, show_plots=False):
+        """Generate Fusion radar plots"""
+        self.evaluator.generate_radar_plots("fusion", show_plots)
 
 
 # ============================================================================
