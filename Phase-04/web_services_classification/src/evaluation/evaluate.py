@@ -61,9 +61,9 @@ class ModelEvaluator:
             # Try to load from train.csv
             train_df = pd.read_csv(splits_dir / 'train.csv')
             
-            if 'label' in train_df.columns and 'encoded_label' in train_df.columns:
+            if 'Service Classification' in train_df.columns and 'encoded_label' in train_df.columns:
                 # Create mapping from encoded labels to original labels
-                label_mapping = train_df.groupby('encoded_label')['label'].first().sort_index()
+                label_mapping = train_df.groupby('encoded_label')['Service Classification'].first().sort_index()
                 return label_mapping.tolist()
             else:
                 # Fallback: create generic labels
@@ -144,38 +144,63 @@ class ModelEvaluator:
             logger.error(f"Error generating confusion matrix for {model_name}: {e}")
             return None
     
-    def generate_classification_report_csv(self, y_true, y_pred, class_labels, model_name, n_categories, feature_type, model_type):
-        """Generate classification report CSV with standardized naming"""
-        try:
-            # Get results path
-            results_path = self._get_results_path(model_type, n_categories)
-            results_path.mkdir(parents=True, exist_ok=True)
+        def _calculate_per_category_metrics(self, y_true, y_pred, class_labels):
+            """Helper function to calculate per-category accuracy (same as recall)"""
+            per_cat_metrics = {}
             
-            # Generate classification report
-            report = classification_report(
-                y_true, 
-                y_pred, 
-                target_names=class_labels,
-                output_dict=True,
-                zero_division=0
-            )
+            for idx, label in enumerate(class_labels):
+                mask = (y_true == idx)
+                if mask.sum() > 0:
+                    # Per-category accuracy = correctly predicted / total in category = recall
+                    per_cat_accuracy = (y_pred[mask] == idx).sum() / mask.sum()
+                    per_cat_metrics[label] = per_cat_accuracy
+                else:
+                    per_cat_metrics[label] = 0.0
             
-            # Convert to DataFrame
-            report_df = pd.DataFrame(report).transpose()
-            
-            # Save using standardized filename
-            filename = FileNamingStandard.generate_classification_report_filename(
-                model_name, feature_type, n_categories
-            )
-            report_file = results_path / filename
-            report_df.to_csv(report_file)
-            
-            logger.info(f"Classification report saved: {report_file}")
-            return str(report_file)
-            
-        except Exception as e:
-            logger.error(f"Error generating classification report for {model_name}: {e}")
-            return None
+            return per_cat_metrics
+
+        def generate_classification_report_csv(self, y_true, y_pred, class_labels, model_name, n_categories, feature_type, model_type):
+            """Generate classification report CSV with standardized naming"""
+            try:
+                # Get results path
+                results_path = self._get_results_path(model_type, n_categories)
+                results_path.mkdir(parents=True, exist_ok=True)
+                
+                # Generate classification report
+                report = classification_report(
+                    y_true, 
+                    y_pred, 
+                    target_names=class_labels,
+                    output_dict=True,
+                    zero_division=0
+                )
+                
+                # Convert to DataFrame
+                report_df = pd.DataFrame(report).transpose()
+                
+                # Calculate per-category accuracy using helper function
+                per_cat_acc = self._calculate_per_category_metrics(y_true, y_pred, class_labels)
+                
+                # Add per-category accuracy column
+                report_df['category_accuracy'] = report_df.index.map(per_cat_acc)
+                
+                # Reset index to create 'category_name' column for easier filtering later
+                report_df.reset_index(inplace=True)
+                report_df.rename(columns={'index': 'category_name'}, inplace=True)
+                
+                # Save using standardized filename
+                filename = FileNamingStandard.generate_classification_report_filename(
+                    model_name, feature_type, n_categories
+                )
+                report_file = results_path / filename
+                report_df.to_csv(report_file, index=False)
+                
+                logger.info(f"Classification report saved: {report_file}")
+                return str(report_file)
+                
+            except Exception as e:
+                logger.error(f"Error generating classification report for {model_name}: {e}")
+                return None
     
     def print_model_metrics(self, results, model_name, n_categories, feature_type, training_time, model_category):
         """Print standardized model metrics"""
