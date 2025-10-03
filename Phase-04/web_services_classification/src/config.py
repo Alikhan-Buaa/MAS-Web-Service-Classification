@@ -44,65 +44,108 @@ LOGGING_CONFIG = {
     }
 }
 
-# Data configuration
+# =============================================================================
+# Data Configuration
+# =============================================================================
 DATA_CONFIG = {
-    'raw_data_path': DATA_PATH / "raw" / "web_services_dataset.csv",  # Specific file path
-    'processed_data_path': DATA_PATH / "processed",
-    'analysis_path': DATA_PATH / "analysis",
-    'text_column': 'Service Description',  # Column name for text data
-    'target_column': 'Service Classification',  # Column name for categories
+    # Input data
+    "raw_data_path": DATA_PATH / "raw" / "web_services_dataset.csv",
+    
+    # Processed data path (added for DL models)
+    "processed_data_path": DATA_PATH / "processed",
+
+    # Column names (adjust if CSV schema changes)
+    "text_column": "Service Description",          # service description text
+    "target_column": "Service Classification",     # classification labels
 }
 
-# Analysis paths (used by data_analysis.py)
-ANALYSIS_PATH = DATA_CONFIG['analysis_path']
+# =============================================================================
+# Step 1: Analysis - Uniform top_{n}_categories naming
+# =============================================================================
+ANALYSIS_PATH = DATA_PATH / "analysis"
+ANALYSIS_CONFIG = {
+    "overall": ANALYSIS_PATH / "overall",                    # global dataset stats & plots
+    "category_wise": ANALYSIS_PATH / "top_{n}_categories",   # Top-N stats & distributions (uniform naming)
+    "comparisons": ANALYSIS_PATH / "comparisons"             # cross-TopN comparisons
+}
 
-# Preprocessing configuration
+# =============================================================================
+# Step 2: Preprocessing - Uniform top_{n}_categories naming
+# =============================================================================
+PREPROCESS_PATH = DATA_PATH / "processed"
+
 PREPROCESSING_CONFIG = {
-    'splits': str(DATA_PATH / "splits" / "top_{n}_categories"),
-    'labels': str(DATA_PATH / "splits" / "top_{n}_categories" / "labels.yaml"),
-    'processed_data': str(DATA_PATH / "processed" / "top_{n}_categories"),
-    'cleaned_data': str(DATA_PATH / "processed" / "cleaned_data.csv"),
-    'features_path': DATA_PATH / "features",
-    # Text preprocessing settings
-    'remove_stopwords': True,
-    'lemmatization': True,
-    'remove_numbers': True,
-    'min_word_length': 2,
-    'max_word_length': 50,
-    'custom_stopwords': []
+    "processed_data": str(PREPROCESS_PATH / "top_{n}_categories"),        # cleaned datasets (uniform naming)
+    "splits": str(PREPROCESS_PATH / "splits" / "top_{n}_categories"),     # train/val/test splits (uniform naming)
+    "labels": str(PREPROCESS_PATH / "labels_top_{n}_categories.yaml"),    # label mappings (uniform naming)
+
+    # Basic text cleaning
+    "remove_stopwords": False,
+    "remove_numbers": True,
+    "lemmatization": True,
+    "lowercase": True,
+    "remove_punctuation": True,
+
+    # Word filtering
+    "min_word_length": 2,
+    "max_word_length": 50,
+
+    # Custom stopwords
+    "custom_stopwords": ["a", "an", "the", "and", "or", "but", "in", "on", "at", "to"],
+
+    # Advanced cleaning
+    "remove_urls": True,
+    "remove_emails": True,
+    "normalize_whitespace": True
 }
 
-# Split configuration (used by data_preprocessing.py)
-SPLIT_CONFIG = {
-    'test_size': 0.2,
-    'val_size': 0.1,
-    'random_state': RANDOM_SEED,
-    'stratify': True
-}
+# =============================================================================
+# Step 3: Features - Uniform top_{n}_categories naming
+# =============================================================================
+FEATURES_PATH = DATA_PATH / "features"
 
-# Feature extraction configuration
 FEATURES_CONFIG = {
-    'tfidf_path': str(DATA_PATH / "features" / "tfidf" / "top_{n}_categories"),
-    'sbert_path': str(DATA_PATH / "features" / "sbert" / "top_{n}_categories"),
-    'plots': str(DATA_PATH / "features" / "plots"),
-    'tfidf': {
-        'max_features': 10000,
-        'ngram_range': (1, 2),
-        'stop_words': 'english'
+    "tfidf_path": str(FEATURES_PATH / "tfidf" / "top_{n}_categories"),   # TF-IDF vectors (consistent naming)
+    "sbert_path": str(FEATURES_PATH / "sbert" / "top_{n}_categories"),   # SBERT embeddings (consistent naming)
+    "plots": FEATURES_PATH / "feature_plots",                            # tfidf_top_terms, sbert_clusters
+    "stats": FEATURES_PATH / "feature_stats",                            # vocab/embedding stats
+
+    # TF-IDF settings
+    "tfidf": {
+        "max_features": 10000,
+        "ngram_range": (1, 2),
+        "min_df": 2,
+        "max_df": 0.95,
+        "use_idf": True,
+        "smooth_idf": True,
+        "sublinear_tf": True
     },
-    'sbert': {
-        'model_name': 'all-MiniLM-L6-v2',
-        'show_progress_bar': True,
-        'batch_size': 32,
-        'normalize_embeddings': True
+
+    # SBERT settings
+    "sbert": {
+        "model_name": "all-MiniLM-L6-v2",
+        "max_length": 512,
+        "batch_size": 32,
+        "device": "cpu",  # change to "cuda" for GPU
+        "normalize_embeddings": True,
+        "show_progress_bar": True,
+        "convert_to_tensor": False,
+        "convert_to_numpy": True
     }
 }
 
-# Preprocessing path alias (referenced in other modules)
-PREPROCESS_PATH = PREPROCESSING_CONFIG['features_path']
+# =============================================================================
+# Data Split Configuration
+# =============================================================================
+SPLIT_CONFIG = {
+    "train_size": 0.80,       # proportion of data for training
+    "val_size": 0.10,         # proportion of data for validation
+    "test_size": 0.10,        # proportion of data for testing
+    "random_state": RANDOM_SEED,  # reproducibility
+    "stratify": True,         # preserve label distribution in splits
+    "shuffle": True           # shuffle before splitting
+}
 
-# Feature extraction configuration alias (for backward compatibility)
-FEATURE_EXTRACTION_CONFIG = FEATURES_CONFIG
 
 # Results configuration - CRITICAL for proper file organization
 RESULTS_CONFIG = {
