@@ -11,11 +11,12 @@ import json
 import logging
 from pathlib import Path
 from sklearn.metrics import classification_report
+from math import pi
 
 # Import standardized naming
 from src.utils.utils import FileNamingStandard
 from src.config import RESULTS_CONFIG, CATEGORY_SIZES
-from math import pi
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -79,15 +80,13 @@ class ModelEvaluator:
             'ml': 'ml',
             'dl': 'dl', 
             'bert': 'bert',
-            'roberta': 'bert',  # Map roberta to bert directory
+            'roberta': 'bert',
             'deepseek': 'deepseek',
-            'fusion':'fusion'
+            'fusion': 'fusion'
         }
         
-        # Get the correct model type for directory structure
         dir_model_type = model_type_mapping.get(model_type, model_type)
         
-        # Determine the correct results path
         if dir_model_type == 'bert':
             return RESULTS_CONFIG['bert_category_paths'][n_categories]
         elif dir_model_type == 'deepseek':
@@ -98,9 +97,7 @@ class ModelEvaluator:
             return RESULTS_CONFIG['dl_category_paths'][n_categories]
         elif dir_model_type == 'fusion':
             return RESULTS_CONFIG['fusion_category_paths'][n_categories]
-            
         else:
-            # Fallback - create a generic path
             fallback_path = Path(f"results/{dir_model_type}/top_{n_categories}_categories")
             fallback_path.mkdir(parents=True, exist_ok=True)
             return fallback_path
@@ -108,11 +105,9 @@ class ModelEvaluator:
     def generate_confusion_heatmap(self, cm, class_labels, model_name, n_categories, feature_type, model_type):
         """Generate confusion matrix heatmap with standardized naming"""
         try:
-            # Get results path
             results_path = self._get_results_path(model_type, n_categories)
             results_path.mkdir(parents=True, exist_ok=True)
             
-            # Create confusion matrix plot
             plt.figure(figsize=(12, 10))
             sns.heatmap(
                 cm, 
@@ -129,7 +124,6 @@ class ModelEvaluator:
             plt.yticks(rotation=0)
             plt.tight_layout()
             
-            # Save plot using standardized filename
             filename = FileNamingStandard.generate_confusion_matrix_filename(
                 model_name, feature_type, n_categories
             )
@@ -151,7 +145,6 @@ class ModelEvaluator:
         for idx, label in enumerate(class_labels):
             mask = (y_true == idx)
             if mask.sum() > 0:
-                # Per-category accuracy = correctly predicted / total in category = recall
                 per_cat_accuracy = (y_pred[mask] == idx).sum() / mask.sum()
                 per_cat_metrics[label] = per_cat_accuracy
             else:
@@ -162,11 +155,9 @@ class ModelEvaluator:
     def generate_classification_report_csv(self, y_true, y_pred, class_labels, model_name, n_categories, feature_type, model_type):
         """Generate classification report CSV with standardized naming"""
         try:
-            # Get results path
             results_path = self._get_results_path(model_type, n_categories)
             results_path.mkdir(parents=True, exist_ok=True)
             
-            # Generate classification report
             report = classification_report(
                 y_true, 
                 y_pred, 
@@ -175,20 +166,13 @@ class ModelEvaluator:
                 zero_division=0
             )
             
-            # Convert to DataFrame
             report_df = pd.DataFrame(report).transpose()
-            
-            # Calculate per-category accuracy using helper function
             per_cat_acc = self._calculate_per_category_metrics(y_true, y_pred, class_labels)
-            
-            # Add per-category accuracy column
             report_df['accuracy'] = report_df.index.map(per_cat_acc)
             
-            # Reset index to create 'category_name' column for easier filtering later
             report_df.reset_index(inplace=True)
             report_df.rename(columns={'index': 'category_name'}, inplace=True)
             
-            # Save using standardized filename
             filename = FileNamingStandard.generate_classification_report_filename(
                 model_name, feature_type, n_categories
             )
@@ -220,18 +204,13 @@ class ModelEvaluator:
     def save_model_performance_data(self, results, model_name, n_categories, feature_type, model_type):
         """Save model performance data to final results"""
         try:
-            # Initialize category if not exists
             if n_categories not in self.final_results:
                 self.final_results[n_categories] = {}
             
-            # Create standardized key
             clean_model_name = FileNamingStandard.standardize_model_name(model_name)
             result_key = f"{clean_model_name}_{feature_type}"
             
-            # Store results
             self.final_results[n_categories][result_key] = results
-            
-            # Save to pickle file for overall analysis
             self._save_final_results_pickle(model_type)
             
             logger.info(f"Performance data saved for {model_name} ({feature_type})")
@@ -242,7 +221,6 @@ class ModelEvaluator:
     def _save_final_results_pickle(self, model_type):
         """Save final results as pickle file for overall analysis"""
         try:
-            # Determine comparisons path
             if model_type == 'ml':
                 comparisons_path = RESULTS_CONFIG['ml_comparisons_path']
             elif model_type == 'dl':
@@ -251,14 +229,13 @@ class ModelEvaluator:
                 comparisons_path = RESULTS_CONFIG['bert_comparisons_path']
             elif model_type == 'deepseek':
                 comparisons_path = RESULTS_CONFIG['deepseek_comparisons_path']
-            elif model_type == 'fusion':  # ✓ ADD THIS
+            elif model_type == 'fusion':
                 comparisons_path = RESULTS_CONFIG['fusion_comparisons_path']
             else:
-                return  # Skip if unknown type
+                return
             
             comparisons_path.mkdir(parents=True, exist_ok=True)
             
-            # Save as pickle
             pickle_file = comparisons_path / f"{model_type}_final_results.pkl"
             with open(pickle_file, 'wb') as f:
                 pickle.dump(self.final_results, f)
@@ -275,16 +252,14 @@ class ModelEvaluator:
                 print(f"No {model_type.upper()} results file found at: {results_file_path}")
                 return
             
-            # Create charts directory
             charts_dir = Path(charts_dir)
             charts_dir.mkdir(parents=True, exist_ok=True)
             
-            # Load results
             with open(results_file_path, "rb") as f:
                 final_results = pickle.load(f)
             
             print(f"\n{'='*80}")
-            print(f"GENERATING {model_type.upper()} COMPARISON PLOTS")
+            print(f"GENERATING {model_type.UPPER()} COMPARISON PLOTS")
             print(f"{'='*80}")
             print(f"Results loaded from: {results_file_path}")
             print(f"Charts will be saved to: {charts_dir}")
@@ -292,17 +267,11 @@ class ModelEvaluator:
             
             model_metrics = {}
             
-            # ✅ CORRECTED: Parse results matching the actual JSON structure
-            # Structure: {n_categories: {model_feature_key: {metrics...}}}
             for n_categories, model_results_dict in final_results.items():
-                # model_results_dict = {"LogisticRegression_tfidf": {...}, "RandomForest_tfidf": {...}, ...}
-                
                 for model_key, entry in model_results_dict.items():
-                    # Extract model name and feature type from the entry itself
                     model_name = entry.get('model_name', 'Unknown')
                     feature_type = entry.get('feature_type', 'unknown')
                     
-                    # Initialize nested dictionary structure
                     if model_name not in model_metrics:
                         model_metrics[model_name] = {}
                     
@@ -320,36 +289,26 @@ class ModelEvaluator:
                             'inference_time': []
                         }
                     
-                    # Extract and append metrics with proper type conversion
                     metrics = model_metrics[model_name][feature_type]
                     
-                    # Handle n_categories as either int or string
                     n_cat = entry.get('n_categories', int(n_categories) if isinstance(n_categories, str) else n_categories)
                     metrics['n'].append(n_cat)
-                    
-                    # Core performance metrics
                     metrics['accuracy'].append(entry.get('accuracy', 0))
                     metrics['precision'].append(entry.get('macro_precision', 0))
                     metrics['recall'].append(entry.get('macro_recall', 0))
                     metrics['f1_score'].append(entry.get('macro_f1', 0))
-                    
-                    # Top-K accuracies
                     metrics['top1_accuracy'].append(entry.get('top1_accuracy', entry.get('accuracy', 0)))
                     metrics['top3_accuracy'].append(entry.get('top3_accuracy', 0))
                     metrics['top5_accuracy'].append(entry.get('top5_accuracy', 0))
-                    
-                    # Timing metrics
                     metrics['training_time'].append(entry.get('training_time', 0))
                     metrics['inference_time'].append(entry.get('inference_time', 0))
             
-            # Sort metrics by n_categories for proper plotting
+            # Sort metrics by n_categories
             for model in model_metrics:
                 for feature in model_metrics[model]:
-                    # Get indices for sorting by n_categories
                     indices = sorted(range(len(model_metrics[model][feature]['n'])), 
                                    key=lambda i: model_metrics[model][feature]['n'][i])
                     
-                    # Sort all metric lists
                     for metric_name in model_metrics[model][feature]:
                         values = model_metrics[model][feature][metric_name]
                         model_metrics[model][feature][metric_name] = [values[i] for i in indices]
@@ -358,24 +317,19 @@ class ModelEvaluator:
             print(f"  Models: {list(model_metrics.keys())}")
             print(f"  Feature types per model: {[list(model_metrics[m].keys()) for m in model_metrics]}\n")
             
-            # Generate all visualization types
             print("Generating visualizations...")
             
-            # 1. Line plots for metrics across categories
             print("  → Generating line plots...")
             self._generate_line_plots(model_metrics, charts_dir, model_type)
             
-            # 2. Bar plots for each category
             print("  → Generating bar plots...")
             self._generate_bar_plots(final_results, charts_dir, model_type)
             
-            # 3. Summary statistics
             print("  → Generating summary statistics...")
             self._generate_summary_statistics(final_results, charts_dir, model_type)
             
-            
             print(f"\n{'='*80}")
-            print(f"✓ ALL {model_type.upper()} COMPARISON PLOTS GENERATED SUCCESSFULLY")
+            print(f"✓ ALL {model_type.UPPER()} COMPARISON PLOTS GENERATED SUCCESSFULLY")
             print(f"{'='*80}\n")
             
         except Exception as e:
@@ -384,9 +338,8 @@ class ModelEvaluator:
             traceback.print_exc()
             raise
 
-    
     def _generate_line_plots(self, model_metrics, charts_dir, model_type):
-        """Generate line plots for performance metrics"""
+        """Generate line plots for performance metrics with improved naming"""
         def plot_metric(metric_name, ylabel=None):
             plt.figure(figsize=(12, 6))
             
@@ -401,13 +354,14 @@ class ModelEvaluator:
             plt.grid(True, alpha=0.3)
             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             plt.tight_layout()
-            plot_path = charts_dir / f"{model_type.upper()}_Model_Performance_{metric_name}.png"
+            
+            max_category = max([max(data['n']) for model in model_metrics.values() for data in model.values()])
+            plot_path = charts_dir / f"{model_type.lower()}_line_{metric_name}_top_{max_category}_categories.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            print(f"{model_type.upper()} line plot saved: {plot_path}")
+            print(f"  ✓ {model_type.UPPER()} line plot saved: {plot_path}")
             plt.close()
 
-        # Generate line plots for all metrics
-        print(f"\nGenerating {model_type.upper()} line plots...")
+        print(f"\nGenerating {model_type.UPPER()} line plots...")
         metrics_config = {
             'accuracy': 'Accuracy',
             'precision': 'Precision (Macro)',
@@ -428,157 +382,197 @@ class ModelEvaluator:
             plot_metric(metric, ylabel)
         
         # Combined top-K accuracy plot
-        print(f"\nGenerating combined {model_type.upper()} top-K accuracy plot...")
+        print(f"  → Generating combined top-K accuracy plot...")
         plt.figure(figsize=(14, 8))
         
         for model, features in model_metrics.items():
             for feature_type, data in features.items():
-                label_base = f"{model} ({feature_type.upper()})"
+                label_base = f"{model} ({feature_type.UPPER()})"
                 plt.plot(data['n'], data['top1_accuracy'], marker='o', label=f"{label_base} - Top-1", linewidth=2)
                 plt.plot(data['n'], data['top3_accuracy'], marker='s', label=f"{label_base} - Top-3", linewidth=2, linestyle='--')
                 plt.plot(data['n'], data['top5_accuracy'], marker='^', label=f"{label_base} - Top-5", linewidth=2, linestyle=':')
         
-        plt.title(f'{model_type.upper()} Models: Top-K Accuracy Comparison')
+        plt.title(f'{model_type.UPPER()} Models: Top-K Accuracy Comparison')
         plt.xlabel('Number of Web Service Categories')
         plt.ylabel('Top-K Accuracy')
         plt.grid(True, alpha=0.3)
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
-        plot_path = charts_dir / f"{model_type.upper()}_Model_Performance_topk_combined.png"
+        
+        max_category = max([max(data['n']) for model in model_metrics.values() for data in model.values()])
+        plot_path = charts_dir / f"{model_type.lower()}_line_topk_combined_top_{max_category}_categories.png"
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        print(f"Combined {model_type.upper()} top-K plot saved: {plot_path}")
+        print(f"  ✓ Combined top-K plot saved: {plot_path}")
         plt.close()
     
     def _generate_bar_plots(self, final_results, charts_dir, model_type):
-        """Generate bar plots for each category size"""
-        print(f"\nGenerating enhanced {model_type.upper()} bar plots for each category size...")
+        """Generate bar plots for each category size with improved naming"""
+        print(f"\nGenerating enhanced {model_type.UPPER()} bar plots for each category size...")
         
-        for n in CATEGORY_SIZES:
-            if n not in final_results:
-                print(f"Skipping n={n} (no {model_type.upper()} results found)")
+        for n_categories, model_results_dict in final_results.items():
+            if not model_results_dict:
+                print(f"Skipping n={n_categories} (no {model_type.UPPER()} results found)")
                 continue
-
-            # Handle different result structures
-            combined_results = []
-            if isinstance(final_results[n], list):
-                combined_results = final_results[n]
-            elif isinstance(final_results[n], dict):
-                for key, value in final_results[n].items():
-                    if isinstance(value, dict):
-                        # Add model name if missing
-                        if 'model' not in value:
-                            value['model'] = key
-                        combined_results.append(value)
             
-            if not combined_results:
-                continue
+            plot_data = {
+                'model_label': [],
+                'accuracy': [],
+                'precision': [],
+                'recall': [],
+                'f1_score': [],
+                'top1_accuracy': [],
+                'top3_accuracy': [],
+                'top5_accuracy': []
+            }
+            
+            for model_key, result in model_results_dict.items():
+                model_name = result.get('model_name', 'Unknown')
+                feature_type = result.get('feature_type', 'unknown')
+                label = f"{model_name}\n({feature_type.UPPER()})"
                 
-            df_combined = pd.DataFrame(combined_results)
-
-            metrics_to_plot = ['accuracy', 'precision', 'recall', 'f1_score', 'top1_accuracy', 'top3_accuracy', 'top5_accuracy']
-            available_metrics = [col for col in metrics_to_plot if col in df_combined.columns]
+                plot_data['model_label'].append(label)
+                plot_data['accuracy'].append(result.get('accuracy', 0))
+                plot_data['precision'].append(result.get('macro_precision', 0))
+                plot_data['recall'].append(result.get('macro_recall', 0))
+                plot_data['f1_score'].append(result.get('macro_f1', 0))
+                plot_data['top1_accuracy'].append(result.get('top1_accuracy', 0))
+                plot_data['top3_accuracy'].append(result.get('top3_accuracy', 0))
+                plot_data['top5_accuracy'].append(result.get('top5_accuracy', 0))
             
-            # Handle missing model column
-            if 'model' not in df_combined.columns:
-                df_combined['model'] = [f'Model_{i}' for i in range(len(df_combined))]
+            df_combined = pd.DataFrame(plot_data)
+            df_combined.set_index('model_label', inplace=True)
             
-            df_plot_combined = df_combined[['model'] + available_metrics]
-            df_plot_combined.set_index('model', inplace=True)
-
-            # Main performance plot
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
             
-            # Standard metrics
+            # Plot 1: Standard metrics
             standard_metrics = ['accuracy', 'precision', 'recall', 'f1_score']
-            available_standard = [m for m in standard_metrics if m in df_plot_combined.columns]
-            if available_standard:
-                df_plot_combined[available_standard].plot(kind='bar', ax=ax1, width=0.8)
-                ax1.set_title(f'{model_type.upper()} Standard Performance Metrics - Top {n} Categories', fontsize=14)
-                ax1.set_ylabel('Score')
-                ax1.set_ylim(0, 1.0)
-                ax1.tick_params(axis='x', rotation=45)
-                ax1.grid(axis='y', alpha=0.3)
-                ax1.legend(title='Metric')
+            df_combined[standard_metrics].plot(kind='bar', ax=ax1, width=0.8)
+            ax1.set_title(f'{model_type.UPPER()} Standard Performance Metrics - Top {n_categories} Categories', 
+                         fontsize=14, fontweight='bold')
+            ax1.set_ylabel('Score', fontsize=12, fontweight='bold')
+            ax1.set_xlabel('Model (Feature Type)', fontsize=12, fontweight='bold')
+            ax1.set_ylim(0, 1.0)
+            ax1.tick_params(axis='x', rotation=45)
+            ax1.grid(axis='y', alpha=0.3, linestyle='--')
+            ax1.legend(title='Metric', labels=['Accuracy', 'Precision', 'Recall', 'F1-Score'])
             
-            # Top-K accuracy metrics
+            # Plot 2: Top-K accuracy metrics
             topk_metrics = ['top1_accuracy', 'top3_accuracy', 'top5_accuracy']
-            available_topk = [col for col in topk_metrics if col in df_plot_combined.columns]
-            if available_topk:
-                df_plot_combined[available_topk].plot(kind='bar', ax=ax2, width=0.8)
-                ax2.set_title(f'{model_type.upper()} Top-K Accuracy Metrics - Top {n} Categories', fontsize=14)
-                ax2.set_ylabel('Top-K Accuracy')
-                ax2.set_ylim(0, 1.0)
-                ax2.tick_params(axis='x', rotation=45)
-                ax2.grid(axis='y', alpha=0.3)
-                ax2.legend(title='Top-K Metric')
+            df_combined[topk_metrics].plot(kind='bar', ax=ax2, width=0.8)
+            ax2.set_title(f'{model_type.UPPER()} Top-K Accuracy Metrics - Top {n_categories} Categories', 
+                         fontsize=14, fontweight='bold')
+            ax2.set_ylabel('Top-K Accuracy', fontsize=12, fontweight='bold')
+            ax2.set_xlabel('Model (Feature Type)', fontsize=12, fontweight='bold')
+            ax2.set_ylim(0, 1.0)
+            ax2.tick_params(axis='x', rotation=45)
+            ax2.grid(axis='y', alpha=0.3, linestyle='--')
+            ax2.legend(title='Top-K Metric', labels=['Top-1', 'Top-3', 'Top-5'])
             
             plt.tight_layout()
             
-            plot_path = charts_dir / f"{model_type.upper()}_Model_Performance_enhanced_top_{n}.png"
+            plot_path = charts_dir / f"{model_type.lower()}_bar_grouped_top_{n_categories}_categories.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            print(f"Enhanced {model_type.upper()} bar plot saved: {plot_path}")
+            print(f"  ✓ Enhanced bar plot saved: {plot_path}")
             plt.close()
+            
+            self._generate_individual_metric_bars(plot_data, n_categories, charts_dir, model_type)
+
+    def _generate_individual_metric_bars(self, plot_data, n_categories, charts_dir, model_type):
+        """Generate individual bar charts with improved naming"""
+        print(f"  → Generating individual metric bar charts for top_{n_categories}...")
+        
+        metrics_config = {
+            'accuracy': ('Accuracy', '#3498db'),
+            'precision': ('Precision (Macro)', '#e74c3c'),
+            'recall': ('Recall (Macro)', '#2ecc71'),
+            'f1_score': ('F1-Score (Macro)', '#f39c12'),
+            'top1_accuracy': ('Top-1 Accuracy', '#9b59b6'),
+            'top3_accuracy': ('Top-3 Accuracy', '#1abc9c'),
+            'top5_accuracy': ('Top-5 Accuracy', '#34495e')
+        }
+        
+        for metric_key, (metric_title, color) in metrics_config.items():
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            x_pos = np.arange(len(plot_data['model_label']))
+            bars = ax.bar(x_pos, plot_data[metric_key], 
+                         color=color, alpha=0.7, edgecolor='black', linewidth=1.5)
+            
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.4f}', ha='center', va='bottom',
+                       fontsize=11, fontweight='bold')
+            
+            max_idx = plot_data[metric_key].index(max(plot_data[metric_key]))
+            bars[max_idx].set_edgecolor('gold')
+            bars[max_idx].set_linewidth(3)
+            
+            ax.set_xlabel('Model (Feature Type)', fontsize=13, fontweight='bold')
+            ax.set_ylabel(metric_title, fontsize=13, fontweight='bold')
+            ax.set_title(f'{model_type.UPPER()} Models: {metric_title} - Top {n_categories} Categories',
+                        fontsize=15, fontweight='bold', pad=20)
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(plot_data['model_label'], fontsize=10, rotation=15, ha='right')
+            ax.set_ylim(0, 1.05)
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            
+            mean_val = np.mean(plot_data[metric_key])
+            ax.axhline(y=mean_val, color='red', linestyle='--', linewidth=2, 
+                      label=f'Mean: {mean_val:.4f}', alpha=0.7)
+            ax.legend(loc='upper right', fontsize=10)
+            
+            plt.tight_layout()
+            
+            plot_path = charts_dir / f"{model_type.lower()}_bar_individual_{metric_key}_top_{n_categories}_categories.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        print(f"  ✓ Individual metric bar charts generated for top_{n_categories}")
     
     def _generate_summary_statistics(self, final_results, charts_dir, model_type):
         """Generate summary statistics table"""
-        print(f"\nGenerating {model_type.upper()} summary statistics...")
+        print(f"\nGenerating {model_type.UPPER()} summary statistics...")
         
-        # Create summary table
         summary_data = []
-        for n in CATEGORY_SIZES:
-            if n in final_results:
-                # Handle different result structures
-                results_list = []
-                if isinstance(final_results[n], list):
-                    results_list = final_results[n]
-                elif isinstance(final_results[n], dict):
-                    for key, value in final_results[n].items():
-                        if isinstance(value, dict):
-                            if 'model' not in value:
-                                value['model'] = key
-                            results_list.append(value)
+        for n_categories, model_results_dict in final_results.items():
+            for model_key, entry in model_results_dict.items():
+                summary_entry = {
+                    'Categories': entry.get('n_categories', n_categories),
+                    'Model': entry.get('model_name', 'Unknown'),
+                    'Feature': entry.get('feature_type', 'unknown'),
+                    'Accuracy': entry.get('accuracy', 0),
+                    'F1-Score': entry.get('macro_f1', 0),
+                    'Top-1': entry.get('top1_accuracy', entry.get('accuracy', 0)),
+                    'Top-3': entry.get('top3_accuracy', 0),
+                    'Top-5': entry.get('top5_accuracy', 0)
+                }
                 
-                for entry in results_list:
-                    if isinstance(entry, dict):
-                        summary_entry = {
-                            'Categories': n,
-                            'Model': entry.get('model', 'Unknown'),
-                            'Feature': entry.get('feature_type', 'unknown'),
-                            'Accuracy': entry.get('accuracy', 0),
-                            'F1-Score': entry.get('f1_score', entry.get('macro_f1', 0)),
-                            'Top-1': entry.get('top1_accuracy', entry.get('accuracy', 0)),
-                            'Top-3': entry.get('top3_accuracy', 0),
-                            'Top-5': entry.get('top5_accuracy', 0)
-                        }
-                        
-                        if model_type.lower() == "dl":
-                            summary_entry.update({
-                                'Training Time': entry.get('training_time', 0),
-                                'Inference Time': entry.get('inference_time', 0)
-                            })
-                        
-                        summary_data.append(summary_entry)
+                if model_type.lower() == "dl":
+                    summary_entry.update({
+                        'Training Time': entry.get('training_time', 0),
+                        'Inference Time': entry.get('inference_time', 0)
+                    })
+                
+                summary_data.append(summary_entry)
         
         if summary_data:
             summary_df = pd.DataFrame(summary_data)
             summary_df = summary_df.round(4)
             
-            # Save summary table
-            summary_path = charts_dir / f"{model_type.upper()}_Model_Performance_summary.csv"
+            summary_path = charts_dir / f"{model_type.lower()}_summary_statistics.csv"
             summary_df.to_csv(summary_path, index=False)
-            print(f"{model_type.upper()} summary table saved: {summary_path}")
+            print(f"✓ {model_type.UPPER()} summary table saved: {summary_path}")
             
-            # Display best performing models
-            print(f"\nTop performing {model_type.upper()} models by metric:")
+            print(f"\nTop performing {model_type.UPPER()} models by metric:")
             for metric in ['Accuracy', 'F1-Score', 'Top-1', 'Top-3', 'Top-5']:
                 if metric in summary_df.columns and len(summary_df) > 0:
                     best = summary_df.loc[summary_df[metric].idxmax()]
                     print(f"  {metric}: {best['Model']} ({best['Feature']}) on {best['Categories']} categories = {best[metric]:.4f}")
             
-            # Best model overall
             if len(summary_df) > 0 and 'Top-1' in summary_df.columns:
                 best_overall = summary_df.loc[summary_df['Top-1'].idxmax()]
-                print(f"\nBest Overall {model_type.upper()} Model:")
+                print(f"\nBest Overall {model_type.UPPER()} Model:")
                 print(f"  {best_overall['Model']} ({best_overall['Feature']}) on {best_overall['Categories']} categories")
                 print(f"  Top-1 Accuracy: {best_overall['Top-1']:.4f}")
                 print(f"  F1-Score: {best_overall['F1-Score']:.4f}")
@@ -587,21 +581,16 @@ class ModelEvaluator:
     
     def generate_radar_plots(self, model_type, show_plots=False):
         """Generate radar plots for model performance across categories"""
-        from math import pi
-        
-        # Model naming patterns for file reading
         NAMING_PATTERNS = {
             "logistic_regression": "LogisticRegression",
             "random_forest": "RandomForest",        
             "xgboost": "XGBoost",
             "bilstm": "BiLSTM",
-            # Fusion models
             "deepseek_roberta_fusion_concat": "DeepSeek_RoBERTa_Fusion_Concat",
             "deepseek_roberta_fusion_average": "DeepSeek_RoBERTa_Fusion_Average",
             "deepseek_roberta_fusion_weighted": "DeepSeek_RoBERTa_Fusion_Weighted",
             "deepseek_roberta_fusion_gating": "DeepSeek_RoBERTa_Fusion_Gating"
         }
-        
         # Get model configuration based on type
         if model_type.lower() == "ml":
             try:
@@ -649,33 +638,30 @@ class ModelEvaluator:
             results_paths = RESULTS_CONFIG["fusion_category_paths"]
             save_dir = RESULTS_CONFIG["fusion_comparisons_path"]
             title_prefix = "Fusion Models"
-            feature_types = ["concat", "average", "weighted", "gating"]
+            feature_types = ["fusion"]
         else:
             logger.warning(f"Unknown model type: {model_type}")
             return
         
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        # Metrics to plot
         metrics = ["precision", "recall", "f1-score", "accuracy"]
         
         print(f"\nGenerating {model_type.upper()} radar plots...")
         
         for num_cat in CATEGORY_SIZES:
-            print(f"Processing radar plots for {num_cat} categories...")
+            print(f"  Processing radar plots for {num_cat} categories...")
             
-            # Load classification reports for this category size
             data = self._load_radar_data(models, feature_types, results_paths[num_cat], num_cat, NAMING_PATTERNS)
             
             if not data:
-                print(f"No data found for {num_cat} categories, skipping radar plots")
+                print(f"  No data found for {num_cat} categories, skipping radar plots")
                 continue
             
-            # Generate radar plot for each metric
             for metric in metrics:
                 self._plot_radar_chart(data, metric, num_cat, title_prefix, save_dir, model_type, show_plots)
         
-        print(f"Completed {model_type.upper()} radar plot generation")
+        print(f"Completed {model_type.UPPER()} radar plot generation")
     
     def _load_radar_data(self, models, feature_types, category_path, num_cat, naming_patterns):
         """Load classification report data for radar plots"""
@@ -683,8 +669,7 @@ class ModelEvaluator:
         
         for model in models:
             for feature in feature_types:
-                # Convert model name using naming patterns
-                model_display_name = naming_patterns.get(model, model)
+                model_display_name = naming_patterns.get(model.lower(), model)
                 filename = FileNamingStandard.generate_classification_report_filename(
                     model_display_name, feature, num_cat
                 )
@@ -695,19 +680,13 @@ class ModelEvaluator:
                     continue
 
                 try:
-                    # Read classification report CSV
                     df = pd.read_csv(file_path)
                     
-                    # Filter to only category rows (exclude macro/micro/weighted avg rows)
                     if 'category_name' in df.columns:
-                        # Filter out summary rows
                         category_rows = df[~df['category_name'].isin(['macro avg', 'micro avg', 'weighted avg'])]
                         category_rows = category_rows[~category_rows['category_name'].isna()]
-                        
-                        # Take only first num_cat rows and set index
                         category_rows = category_rows.head(num_cat).set_index("category_name")
                         data[f"{model}_{feature}"] = category_rows
-                        
                     else:
                         logger.warning(f"No 'category_name' column found in {file_path}")
                         
@@ -717,11 +696,10 @@ class ModelEvaluator:
         return data
     
     def _plot_radar_chart(self, data, metric, num_cat, title_prefix, save_dir, model_type, show_plots):
-        """Generate and save radar chart for given metric"""
+        """Generate and save radar chart with improved naming"""
         if not data:
             return
 
-        # Get category labels from first dataset
         first_key = list(data.keys())[0]
         if first_key not in data or data[first_key].empty:
             return
@@ -733,16 +711,13 @@ class ModelEvaluator:
             logger.warning(f"No labels found for radar plot with {num_cat} categories")
             return
         
-        # Calculate angles for radar chart
         angles = [n / float(num_labels) * 2 * pi for n in range(num_labels)]
-        angles += angles[:1]  # Complete the circle
+        angles += angles[:1]
 
-        # Create figure with appropriate size
         figsize = (8, 8) if num_cat < 40 else (14, 14)
         plt.figure(figsize=figsize)
         ax = plt.subplot(111, polar=True)
 
-        # Plot each model-feature combination
         colors = plt.cm.Set3(np.linspace(0, 1, len(data)))
         
         for i, (model_name, df) in enumerate(data.items()):
@@ -750,48 +725,33 @@ class ModelEvaluator:
                 logger.warning(f"Metric '{metric}' not found in data for {model_name}")
                 continue
                 
-            # Get metric values, handling NaN values
             metric_values = df[metric].fillna(0).tolist()
             
-            # Ensure we have the right number of values
             if len(metric_values) != num_labels:
-                logger.warning(f"Metric values length mismatch for {model_name}: expected {num_labels}, got {len(metric_values)}")
+                logger.warning(f"Metric values length mismatch for {model_name}")
                 continue
             
-            # Complete the circle for plotting
             values = metric_values + metric_values[:1]
-            
-            # Create readable label
             display_name = model_name.replace('_', ' ').title()
             
-            # Plot the radar line
             ax.plot(angles, values, 'o-', linewidth=2, label=display_name, color=colors[i])
             ax.fill(angles, values, alpha=0.1, color=colors[i])
 
-        # Customize the plot
         ax.set_xticks(angles[:-1])
-        
-        # Adjust label size and rotation based on number of categories
         fontsize = 10 if num_cat < 20 else 8 if num_cat < 40 else 6
-        
-        # Truncate long labels for readability
         display_labels = [lbl[:15] + "..." if len(lbl) > 18 else lbl for lbl in labels]
         ax.set_xticklabels(display_labels, fontsize=fontsize)
         
-        # Set title and limits
         ax.set_title(f"{title_prefix} - {metric.replace('-', ' ').title()} Performance\n(Top {num_cat} Categories)",
                      size=16 if num_cat < 40 else 14, weight="bold", pad=20)
         ax.set_ylim(0, 1)
-        
-        # Add grid
         ax.grid(True, alpha=0.3)
         
-        # Position legend appropriately
         plt.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=10)
         plt.tight_layout()
 
-        # Save the plot
-        filename = f"{model_type.upper()}_radar_{metric.replace('-', '_')}_top_{num_cat}_categories.png"
+        # Improved naming: model_type_radar_metricname_top_N_categories.png
+        filename = f"{model_type.lower()}_radar_{metric.replace('-', '_')}_top_{num_cat}_categories.png"
         filepath = save_dir / filename
         plt.savefig(filepath, dpi=300, bbox_inches="tight")
         logger.info(f"Radar plot saved: {filepath}")
