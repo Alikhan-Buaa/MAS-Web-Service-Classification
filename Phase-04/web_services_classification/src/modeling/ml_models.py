@@ -19,6 +19,7 @@ from sklearn.metrics import (
     confusion_matrix
 )
 import xgboost as xgb
+from math import pi
 
 # Import configuration and utilities
 from src.config import (

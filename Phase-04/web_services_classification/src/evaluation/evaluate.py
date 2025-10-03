@@ -15,7 +15,7 @@ from sklearn.metrics import classification_report
 # Import standardized naming
 from src.utils.utils import FileNamingStandard
 from src.config import RESULTS_CONFIG, CATEGORY_SIZES
-
+from math import pi
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ class ModelEvaluator:
             per_cat_acc = self._calculate_per_category_metrics(y_true, y_pred, class_labels)
             
             # Add per-category accuracy column
-            report_df['category_accuracy'] = report_df.index.map(per_cat_acc)
+            report_df['accuracy'] = report_df.index.map(per_cat_acc)
             
             # Reset index to create 'category_name' column for easier filtering later
             report_df.reset_index(inplace=True)
@@ -269,7 +269,7 @@ class ModelEvaluator:
             logger.error(f"Error saving final results pickle: {e}")
     
     def plot_results_comparison(self, results_file_path, charts_dir, model_type):
-        """Generate comparison plots with full implementation"""
+        """Generate comprehensive comparison plots synchronized with save format"""
         try:
             if not results_file_path.exists():
                 print(f"No {model_type.upper()} results file found at: {results_file_path}")
@@ -283,51 +283,107 @@ class ModelEvaluator:
             with open(results_file_path, "rb") as f:
                 final_results = pickle.load(f)
             
-            print(f"Generating plots and analysis for {model_type.upper()} results...")
+            print(f"\n{'='*80}")
+            print(f"GENERATING {model_type.upper()} COMPARISON PLOTS")
+            print(f"{'='*80}")
             print(f"Results loaded from: {results_file_path}")
             print(f"Charts will be saved to: {charts_dir}")
+            print(f"{'='*80}\n")
             
             model_metrics = {}
-
-            # Parse results and organize by model and feature type
-            for n, results in final_results.items():
-                for entry in results:
-                    if isinstance(entry, dict):
-                        model = entry.get('model', 'Unknown')
-                        feature_type = entry.get('feature_type', 'unknown')
-                        
-                        if model not in model_metrics:
-                            model_metrics[model] = {}
-                        
-                        if feature_type not in model_metrics[model]:
-                            model_metrics[model][feature_type] = {
-                                'n': [], 'accuracy': [], 'precision': [], 'recall': [], 'f1_score': [],
-                                'top1_accuracy': [], 'top3_accuracy': [], 'top5_accuracy': [],
-                                'training_time': [], 'inference_time': []
-                            }
-                        
-                        model_metrics[model][feature_type]['n'].append(entry.get('n_categories', n))
-                        model_metrics[model][feature_type]['accuracy'].append(entry.get('accuracy', 0))
-                        model_metrics[model][feature_type]['precision'].append(entry.get('precision', entry.get('macro_precision', 0)))
-                        model_metrics[model][feature_type]['recall'].append(entry.get('recall', entry.get('macro_recall', 0)))
-                        model_metrics[model][feature_type]['f1_score'].append(entry.get('f1_score', entry.get('macro_f1', 0)))
-                        model_metrics[model][feature_type]['top1_accuracy'].append(entry.get('top1_accuracy', entry.get('accuracy', 0)))
-                        model_metrics[model][feature_type]['top3_accuracy'].append(entry.get('top3_accuracy', 0))
-                        model_metrics[model][feature_type]['top5_accuracy'].append(entry.get('top5_accuracy', 0))
-                        model_metrics[model][feature_type]['training_time'].append(entry.get('training_time', 0))
-                        model_metrics[model][feature_type]['inference_time'].append(entry.get('inference_time', 0))
             
-            # Generate line plots
+            # ✅ CORRECTED: Parse results matching the actual JSON structure
+            # Structure: {n_categories: {model_feature_key: {metrics...}}}
+            for n_categories, model_results_dict in final_results.items():
+                # model_results_dict = {"LogisticRegression_tfidf": {...}, "RandomForest_tfidf": {...}, ...}
+                
+                for model_key, entry in model_results_dict.items():
+                    # Extract model name and feature type from the entry itself
+                    model_name = entry.get('model_name', 'Unknown')
+                    feature_type = entry.get('feature_type', 'unknown')
+                    
+                    # Initialize nested dictionary structure
+                    if model_name not in model_metrics:
+                        model_metrics[model_name] = {}
+                    
+                    if feature_type not in model_metrics[model_name]:
+                        model_metrics[model_name][feature_type] = {
+                            'n': [], 
+                            'accuracy': [], 
+                            'precision': [], 
+                            'recall': [], 
+                            'f1_score': [],
+                            'top1_accuracy': [], 
+                            'top3_accuracy': [], 
+                            'top5_accuracy': [],
+                            'training_time': [], 
+                            'inference_time': []
+                        }
+                    
+                    # Extract and append metrics with proper type conversion
+                    metrics = model_metrics[model_name][feature_type]
+                    
+                    # Handle n_categories as either int or string
+                    n_cat = entry.get('n_categories', int(n_categories) if isinstance(n_categories, str) else n_categories)
+                    metrics['n'].append(n_cat)
+                    
+                    # Core performance metrics
+                    metrics['accuracy'].append(entry.get('accuracy', 0))
+                    metrics['precision'].append(entry.get('macro_precision', 0))
+                    metrics['recall'].append(entry.get('macro_recall', 0))
+                    metrics['f1_score'].append(entry.get('macro_f1', 0))
+                    
+                    # Top-K accuracies
+                    metrics['top1_accuracy'].append(entry.get('top1_accuracy', entry.get('accuracy', 0)))
+                    metrics['top3_accuracy'].append(entry.get('top3_accuracy', 0))
+                    metrics['top5_accuracy'].append(entry.get('top5_accuracy', 0))
+                    
+                    # Timing metrics
+                    metrics['training_time'].append(entry.get('training_time', 0))
+                    metrics['inference_time'].append(entry.get('inference_time', 0))
+            
+            # Sort metrics by n_categories for proper plotting
+            for model in model_metrics:
+                for feature in model_metrics[model]:
+                    # Get indices for sorting by n_categories
+                    indices = sorted(range(len(model_metrics[model][feature]['n'])), 
+                                   key=lambda i: model_metrics[model][feature]['n'][i])
+                    
+                    # Sort all metric lists
+                    for metric_name in model_metrics[model][feature]:
+                        values = model_metrics[model][feature][metric_name]
+                        model_metrics[model][feature][metric_name] = [values[i] for i in indices]
+            
+            print(f"✓ Parsed {len(model_metrics)} models with results")
+            print(f"  Models: {list(model_metrics.keys())}")
+            print(f"  Feature types per model: {[list(model_metrics[m].keys()) for m in model_metrics]}\n")
+            
+            # Generate all visualization types
+            print("Generating visualizations...")
+            
+            # 1. Line plots for metrics across categories
+            print("  → Generating line plots...")
             self._generate_line_plots(model_metrics, charts_dir, model_type)
             
-            # Generate bar plots for each category
+            # 2. Bar plots for each category
+            print("  → Generating bar plots...")
             self._generate_bar_plots(final_results, charts_dir, model_type)
             
-            # Generate summary statistics
+            # 3. Summary statistics
+            print("  → Generating summary statistics...")
             self._generate_summary_statistics(final_results, charts_dir, model_type)
-                
+            
+            
+            print(f"\n{'='*80}")
+            print(f"✓ ALL {model_type.upper()} COMPARISON PLOTS GENERATED SUCCESSFULLY")
+            print(f"{'='*80}\n")
+            
         except Exception as e:
             logger.error(f"Error generating {model_type} plots: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
     
     def _generate_line_plots(self, model_metrics, charts_dir, model_type):
         """Generate line plots for performance metrics"""
