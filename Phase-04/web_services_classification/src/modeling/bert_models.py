@@ -589,16 +589,33 @@ class RoBERTaModelTrainer:
             all_results[model_key] = model_results
         
         print(f"\n{'='*80}")
+        print(f"\n{'='*80}")
         print(f"RoBERTa MODEL TRAINING PIPELINE COMPLETED")
         print(f"{'='*80}")
-        
+
         # Print comparison if multiple models trained
         if len(all_results) > 1:
             self._print_roberta_comparison(all_results)
-        
+
         # Save results for overall analysis
         self.save_results_for_overall_analysis(all_results)
-        
+
+        # Generate visualizations
+        print(f"\n{'='*80}")
+        print(f"GENERATING BERT VISUALIZATIONS")
+        print(f"{'='*80}")
+        try:
+            print("Generating comparison plots...")
+            self.plot_roberta_results_only()
+            print("Generating radar plots...")
+            self.evaluator.generate_radar_plots("bert", show_plots=False)
+            print("All BERT visualizations completed successfully!")
+        except Exception as e:
+            logger.error(f"Error generating BERT visualizations: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"Warning: Some visualizations may not have been generated due to errors.")
+
         return all_results
     
     def _print_roberta_comparison(self, all_results):
