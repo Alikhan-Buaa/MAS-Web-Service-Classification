@@ -259,7 +259,7 @@ class ModelEvaluator:
                 final_results = pickle.load(f)
             
             print(f"\n{'='*80}")
-            print(f"GENERATING {model_type.UPPER()} COMPARISON PLOTS")
+            print(f"GENERATING {model_type.upper()} COMPARISON PLOTS")
             print(f"{'='*80}")
             print(f"Results loaded from: {results_file_path}")
             print(f"Charts will be saved to: {charts_dir}")
@@ -329,7 +329,7 @@ class ModelEvaluator:
             self._generate_summary_statistics(final_results, charts_dir, model_type)
             
             print(f"\n{'='*80}")
-            print(f"✓ ALL {model_type.UPPER()} COMPARISON PLOTS GENERATED SUCCESSFULLY")
+            print(f"✓ ALL {model_type.upper()} COMPARISON PLOTS GENERATED SUCCESSFULLY")
             print(f"{'='*80}\n")
             
         except Exception as e:
@@ -358,10 +358,10 @@ class ModelEvaluator:
             max_category = max([max(data['n']) for model in model_metrics.values() for data in model.values()])
             plot_path = charts_dir / f"{model_type.lower()}_line_{metric_name}_top_{max_category}_categories.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            print(f"  ✓ {model_type.UPPER()} line plot saved: {plot_path}")
+            print(f"  ✓ {model_type.upper()} line plot saved: {plot_path}")
             plt.close()
 
-        print(f"\nGenerating {model_type.UPPER()} line plots...")
+        print(f"\nGenerating {model_type.upper()} line plots...")
         metrics_config = {
             'accuracy': 'Accuracy',
             'precision': 'Precision (Macro)',
@@ -387,12 +387,12 @@ class ModelEvaluator:
         
         for model, features in model_metrics.items():
             for feature_type, data in features.items():
-                label_base = f"{model} ({feature_type.UPPER()})"
+                label_base = f"{model} ({feature_type.upper()})"
                 plt.plot(data['n'], data['top1_accuracy'], marker='o', label=f"{label_base} - Top-1", linewidth=2)
                 plt.plot(data['n'], data['top3_accuracy'], marker='s', label=f"{label_base} - Top-3", linewidth=2, linestyle='--')
                 plt.plot(data['n'], data['top5_accuracy'], marker='^', label=f"{label_base} - Top-5", linewidth=2, linestyle=':')
         
-        plt.title(f'{model_type.UPPER()} Models: Top-K Accuracy Comparison')
+        plt.title(f'{model_type.upper()} Models: Top-K Accuracy Comparison')
         plt.xlabel('Number of Web Service Categories')
         plt.ylabel('Top-K Accuracy')
         plt.grid(True, alpha=0.3)
@@ -407,11 +407,11 @@ class ModelEvaluator:
     
     def _generate_bar_plots(self, final_results, charts_dir, model_type):
         """Generate bar plots for each category size with improved naming"""
-        print(f"\nGenerating enhanced {model_type.UPPER()} bar plots for each category size...")
+        print(f"\nGenerating enhanced {model_type.upper()} bar plots for each category size...")
         
         for n_categories, model_results_dict in final_results.items():
             if not model_results_dict:
-                print(f"Skipping n={n_categories} (no {model_type.UPPER()} results found)")
+                print(f"Skipping n={n_categories} (no {model_type.upper()} results found)")
                 continue
             
             plot_data = {
@@ -428,7 +428,7 @@ class ModelEvaluator:
             for model_key, result in model_results_dict.items():
                 model_name = result.get('model_name', 'Unknown')
                 feature_type = result.get('feature_type', 'unknown')
-                label = f"{model_name}\n({feature_type.UPPER()})"
+                label = f"{model_name}\n({feature_type.upper()})"
                 
                 plot_data['model_label'].append(label)
                 plot_data['accuracy'].append(result.get('accuracy', 0))
@@ -447,7 +447,7 @@ class ModelEvaluator:
             # Plot 1: Standard metrics
             standard_metrics = ['accuracy', 'precision', 'recall', 'f1_score']
             df_combined[standard_metrics].plot(kind='bar', ax=ax1, width=0.8)
-            ax1.set_title(f'{model_type.UPPER()} Standard Performance Metrics - Top {n_categories} Categories', 
+            ax1.set_title(f'{model_type.upper()} Standard Performance Metrics - Top {n_categories} Categories', 
                          fontsize=14, fontweight='bold')
             ax1.set_ylabel('Score', fontsize=12, fontweight='bold')
             ax1.set_xlabel('Model (Feature Type)', fontsize=12, fontweight='bold')
@@ -459,7 +459,7 @@ class ModelEvaluator:
             # Plot 2: Top-K accuracy metrics
             topk_metrics = ['top1_accuracy', 'top3_accuracy', 'top5_accuracy']
             df_combined[topk_metrics].plot(kind='bar', ax=ax2, width=0.8)
-            ax2.set_title(f'{model_type.UPPER()} Top-K Accuracy Metrics - Top {n_categories} Categories', 
+            ax2.set_title(f'{model_type.upper()} Top-K Accuracy Metrics - Top {n_categories} Categories', 
                          fontsize=14, fontweight='bold')
             ax2.set_ylabel('Top-K Accuracy', fontsize=12, fontweight='bold')
             ax2.set_xlabel('Model (Feature Type)', fontsize=12, fontweight='bold')
@@ -510,7 +510,7 @@ class ModelEvaluator:
             
             ax.set_xlabel('Model (Feature Type)', fontsize=13, fontweight='bold')
             ax.set_ylabel(metric_title, fontsize=13, fontweight='bold')
-            ax.set_title(f'{model_type.UPPER()} Models: {metric_title} - Top {n_categories} Categories',
+            ax.set_title(f'{model_type.upper()} Models: {metric_title} - Top {n_categories} Categories',
                         fontsize=15, fontweight='bold', pad=20)
             ax.set_xticks(x_pos)
             ax.set_xticklabels(plot_data['model_label'], fontsize=10, rotation=15, ha='right')
@@ -532,7 +532,7 @@ class ModelEvaluator:
     
     def _generate_summary_statistics(self, final_results, charts_dir, model_type):
         """Generate summary statistics table"""
-        print(f"\nGenerating {model_type.UPPER()} summary statistics...")
+        print(f"\nGenerating {model_type.upper()} summary statistics...")
         
         summary_data = []
         for n_categories, model_results_dict in final_results.items():
@@ -562,9 +562,9 @@ class ModelEvaluator:
             
             summary_path = charts_dir / f"{model_type.lower()}_summary_statistics.csv"
             summary_df.to_csv(summary_path, index=False)
-            print(f"✓ {model_type.UPPER()} summary table saved: {summary_path}")
+            print(f"✓ {model_type.upper()} summary table saved: {summary_path}")
             
-            print(f"\nTop performing {model_type.UPPER()} models by metric:")
+            print(f"\nTop performing {model_type.upper()} models by metric:")
             for metric in ['Accuracy', 'F1-Score', 'Top-1', 'Top-3', 'Top-5']:
                 if metric in summary_df.columns and len(summary_df) > 0:
                     best = summary_df.loc[summary_df[metric].idxmax()]
@@ -572,7 +572,7 @@ class ModelEvaluator:
             
             if len(summary_df) > 0 and 'Top-1' in summary_df.columns:
                 best_overall = summary_df.loc[summary_df['Top-1'].idxmax()]
-                print(f"\nBest Overall {model_type.UPPER()} Model:")
+                print(f"\nBest Overall {model_type.upper()} Model:")
                 print(f"  {best_overall['Model']} ({best_overall['Feature']}) on {best_overall['Categories']} categories")
                 print(f"  Top-1 Accuracy: {best_overall['Top-1']:.4f}")
                 print(f"  F1-Score: {best_overall['F1-Score']:.4f}")
@@ -661,7 +661,7 @@ class ModelEvaluator:
             for metric in metrics:
                 self._plot_radar_chart(data, metric, num_cat, title_prefix, save_dir, model_type, show_plots)
         
-        print(f"Completed {model_type.UPPER()} radar plot generation")
+        print(f"Completed {model_type.upper()} radar plot generation")
     
     def _load_radar_data(self, models, feature_types, category_path, num_cat, naming_patterns):
         """Load classification report data for radar plots"""
@@ -669,12 +669,13 @@ class ModelEvaluator:
         
         for model in models:
             for feature in feature_types:
-                model_display_name = naming_patterns.get(model.lower(), model)
+                model_lower = model.lower()
+                model_display_name = naming_patterns.get(model_lower, model)
                 filename = FileNamingStandard.generate_classification_report_filename(
                     model_display_name, feature, num_cat
                 )
                 file_path = category_path / filename
-
+                print(f"  DEBUG: Looking for file: {file_path}")
                 if not file_path.exists():
                     logger.warning(f"Missing radar data file: {file_path}")
                     continue
