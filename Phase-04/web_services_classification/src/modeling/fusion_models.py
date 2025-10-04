@@ -917,16 +917,15 @@ class DeepSeekRoBERTaFusionTrainer:
             for fusion_type, fusion_results in all_results.items():
                 for n_categories, result in fusion_results.items():
                     if n_categories not in formatted_results:
-                        formatted_results[n_categories] = []  # Use list like other models
+                        formatted_results[n_categories] = {}  # Use list like other models
                     
                     # Create result entry with 'model' key for compatibility
-                    result_entry = result.copy()
-                    result_entry['model'] = result.get('model_name', f'DeepSeek-RoBERTa-Fusion-{fusion_type.capitalize()}')
+                    model_name = result.get('model_name', f'DeepSeek_RoBERTa_Fusion_{fusion_type.capitalize()}')
+                    clean_model_name = FileNamingStandard.standardize_model_name(model_name)
+                    feature_type = result.get('feature_type', fusion_type)
+                    result_key = f"{clean_model_name}_{feature_type}"
                     
-                    if 'n_categories' not in result_entry:
-                        result_entry['n_categories'] = n_categories
-                    
-                    formatted_results[n_categories].append(result_entry)
+                    formatted_results[n_categories][result_key] = result
             
             # Save as pickle - same format as ML/DL/BERT
             pickle_file = comparisons_path / "fusion_final_results.pkl"
@@ -999,14 +998,30 @@ class DeepSeekRoBERTaFusionTrainer:
         print(f"\n{'='*80}")
         print(f"DEEPSEEK-ROBERTA FUSION MODEL TRAINING PIPELINE COMPLETED")
         print(f"{'='*80}")
-        
+
         # Print comparison
         if len(all_results) > 1:
             self._print_fusion_comparison(all_results)
-        
+
         # Save results for overall analysis
         self.save_results_for_overall_analysis(all_results)
-        
+
+        # Generate visualizations
+        print(f"\n{'='*80}")
+        print(f"GENERATING FUSION VISUALIZATIONS")
+        print(f"{'='*80}")
+        try:
+            print("Generating comparison plots...")
+            self.plot_fusion_results_only()
+            print("Generating radar plots...")
+            self.evaluator.generate_radar_plots("fusion", show_plots=False)
+            print("All Fusion visualizations completed successfully!")
+        except Exception as e:
+            logger.error(f"Error generating Fusion visualizations: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"Warning: Some visualizations may not have been generated due to errors.")
+
         return all_results
     
     def _print_fusion_comparison(self, all_results):
