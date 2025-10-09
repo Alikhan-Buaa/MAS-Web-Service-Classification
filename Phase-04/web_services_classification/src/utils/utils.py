@@ -269,6 +269,7 @@ class FileNamingStandard:
     """
     Standardized file naming conventions across all model types
     Uses mappings from config.py for consistency
+    Pattern: {ModelName}_{FeatureType}_top_{N}_categories_{FileType}.{Extension}
     """
     
     @staticmethod
@@ -301,44 +302,62 @@ class FileNamingStandard:
     
     @staticmethod
     def generate_confusion_matrix_filename(model_name, feature_type, n_categories, file_format='png'):
-        """Generate standardized confusion matrix filename"""
+        """
+        Generate standardized confusion matrix filename
+        Pattern: {ModelName}_{FeatureType}_top_{N}_categories_confusion_matrix.{Extension}
+        """
         clean_model = FileNamingStandard.standardize_model_name(model_name)
         clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
-        return f"{clean_model}_{clean_feature}_confusion_matrix_top_{n_categories}_categories.{file_format}"
+        return f"{clean_model}_{clean_feature}_top_{n_categories}_categories_confusion_matrix.{file_format}"
     
     @staticmethod
     def generate_classification_report_filename(model_name, feature_type, n_categories, file_format='csv'):
-        """Generate standardized classification report filename"""
+        """
+        Generate standardized classification report filename
+        Pattern: {ModelName}_{FeatureType}_top_{N}_categories_classification_report.{Extension}
+        """
         clean_model = FileNamingStandard.standardize_model_name(model_name)
         clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
-        return f"{clean_model}_{clean_feature}_classification_report_top_{n_categories}_categories.{file_format}"
+        return f"{clean_model}_{clean_feature}_top_{n_categories}_categories_classification_report.{file_format}"
     
     @staticmethod
     def generate_training_history_filename(model_name, n_categories, file_format='png'):
-        """Generate standardized training history filename"""
+        """
+        Generate standardized training history filename
+        Pattern: {ModelName}_training_history_top_{N}_categories.{Extension}
+        """
         clean_model = FileNamingStandard.standardize_model_name(model_name)
         return f"{clean_model}_training_history_top_{n_categories}_categories.{file_format}"
     
     @staticmethod
     def generate_model_filename(model_name, feature_type, n_categories, file_format='pth'):
-        """Generate standardized model filename"""
+        """
+        Generate standardized model filename
+        Pattern: {ModelName}_{FeatureType}_top_{N}_categories_model.{Extension}
+        """
         clean_model = FileNamingStandard.standardize_model_name(model_name)
         clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
-        return f"{clean_model}_{clean_feature}_model_top_{n_categories}_categories.{file_format}"
+        return f"{clean_model}_{clean_feature}_top_{n_categories}_categories_model.{file_format}"
     
     @staticmethod
     def generate_metrics_filename(model_name, feature_type, n_categories, file_format='json'):
-        """Generate standardized metrics filename"""
+        """
+        Generate standardized metrics filename
+        Pattern: {ModelName}_{FeatureType}_top_{N}_categories_metrics.{Extension}
+        """
         clean_model = FileNamingStandard.standardize_model_name(model_name)
         clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
-        return f"{clean_model}_{clean_feature}_metrics_top_{n_categories}_categories.{file_format}"
+        return f"{clean_model}_{clean_feature}_top_{n_categories}_categories_metrics.{file_format}"
     
     @staticmethod
     def generate_config_filename(model_name, feature_type, n_categories, file_format='json'):
-        """Generate standardized config filename"""
+        """
+        Generate standardized config filename
+        Pattern: {ModelName}_{FeatureType}_top_{N}_categories_config.{Extension}
+        """
         clean_model = FileNamingStandard.standardize_model_name(model_name)
         clean_feature = FileNamingStandard.standardize_feature_name(feature_type)
-        return f"{clean_model}_{clean_feature}_config_top_{n_categories}_categories.{file_format}"
+        return f"{clean_model}_{clean_feature}_top_{n_categories}_categories_config.{file_format}"
 
 
 # Export commonly used functions

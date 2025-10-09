@@ -639,7 +639,7 @@ class DeepSeekRoBERTaFusionTrainer:
             logger.error(f"Error creating training history plot: {e}")
             return None
     
-    def evaluate_fusion_model(self, model, test_loader, model_name, n_categories, class_labels):
+    def evaluate_fusion_model(self, model, test_loader, model_name, n_categories, class_labels,fusion_type):
         """Comprehensive evaluation"""
         try:
             logger.info(f"Evaluating model: {model_name}")
@@ -697,11 +697,10 @@ class DeepSeekRoBERTaFusionTrainer:
             # Confusion matrix
             cm = confusion_matrix(y_true, y_pred)
             
-            # Create visualizations
-            # MODIFIED: Simplified feature_type - Extract fusion type from standardized model name
-            # model_name format: "DeepSeek_RoBERTa_Fusion_Concat" after standardization
-            fusion_type = model_name.split('_')[-1].lower()  # Extract 'concat', 'average', 'weighted', 'gating'
-            feature_type = fusion_type  # Use simple fusion type name
+            # Standardize fusion_type to feature type format (Concat, Average, Weighted, Gating)
+            # fusion_type comes as parameter from train_model_on_category()
+            from src.config import FEATURE_NAME_MAPPING
+            feature_type = FEATURE_NAME_MAPPING.get(fusion_type.lower(), fusion_type.capitalize())
             
             # Use self.model_type from config
             cm_plot_path = self.evaluator.generate_confusion_heatmap(
@@ -873,7 +872,7 @@ class DeepSeekRoBERTaFusionTrainer:
             history_plot_path = self.plot_training_history(history, display_name, n_categories)
             
             # Evaluate model
-            eval_results = self.evaluate_fusion_model(model, test_loader, display_name, n_categories, class_labels)
+            eval_results = self.evaluate_fusion_model(model, test_loader, display_name, n_categories, class_labels,fusion_type)
             eval_results['training_time'] = float(training_time)
             eval_results['model_path'] = str(model_path)
             eval_results['model_variant'] = fusion_type

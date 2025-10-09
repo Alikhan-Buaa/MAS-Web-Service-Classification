@@ -342,6 +342,7 @@ FUSION_CONFIG = {
     'deepseek_model': 'deepseek-ai/deepseek-llm-7b-base',
     'roberta_model': 'roberta-base',
     'fusion_types': ['concat', 'average', 'weighted', 'gating'],  # Different fusion strategies
+    'feature_types': ['Concat', 'Average', 'Weighted', 'Gating'],  # Standardized feature type names
     'common_dim': 768,  # Common embedding dimension
     'max_length': 128,
     'num_train_epochs': 10,
@@ -390,15 +391,22 @@ MODEL_NAME_MAPPING = {
     'DeepSeek_7B_Base': 'DeepSeek_7B_Base',
     'deepseek-ai/deepseek-llm-7b-base': 'DeepSeek_7B_Base',
     
-    # Fusion Models
-    'deepseek_roberta_fusion_concat': 'DeepSeek_RoBERTa_Fusion_Concat',
-    'deepseek_roberta_fusion_average': 'DeepSeek_RoBERTa_Fusion_Average',
-    'deepseek_roberta_fusion_weighted': 'DeepSeek_RoBERTa_Fusion_Weighted',
-    'deepseek_roberta_fusion_gating': 'DeepSeek_RoBERTa_Fusion_Gating',
-    'DeepSeek-RoBERTa-Fusion-Concat': 'DeepSeek_RoBERTa_Fusion_Concat',
-    'DeepSeek-RoBERTa-Fusion-Average': 'DeepSeek_RoBERTa_Fusion_Average',
-    'DeepSeek-RoBERTa-Fusion-Weighted': 'DeepSeek_RoBERTa_Fusion_Weighted',
-    'DeepSeek-RoBERTa-Fusion-Gating': 'DeepSeek_RoBERTa_Fusion_Gating',
+    # Fusion Models - ALL map to base name, fusion type becomes feature type
+    'deepseek_roberta_fusion': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek_RoBERTa_Fusion': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek-RoBERTa-Fusion': 'DeepSeek_RoBERTa_Fusion',
+    'deepseek_roberta_fusion_concat': 'DeepSeek_RoBERTa_Fusion',
+    'deepseek_roberta_fusion_average': 'DeepSeek_RoBERTa_Fusion',
+    'deepseek_roberta_fusion_weighted': 'DeepSeek_RoBERTa_Fusion',
+    'deepseek_roberta_fusion_gating': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek-RoBERTa-Fusion-Concat': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek-RoBERTa-Fusion-Average': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek-RoBERTa-Fusion-Weighted': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek-RoBERTa-Fusion-Gating': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek_RoBERTa_Fusion_Concat': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek_RoBERTa_Fusion_Average': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek_RoBERTa_Fusion_Weighted': 'DeepSeek_RoBERTa_Fusion',
+    'DeepSeek_RoBERTa_Fusion_Gating': 'DeepSeek_RoBERTa_Fusion',
 }
 
 # Feature type standardization mapping
@@ -410,15 +418,15 @@ FEATURE_NAME_MAPPING = {
     'raw_text': 'RawText',
     'RawText': 'RawText',
     # Fusion feature types - simplified names
+    # Fusion feature types
     'concat': 'Concat',
+    'Concat': 'Concat',
     'average': 'Average',
+    'Average': 'Average',
     'weighted': 'Weighted',
+    'Weighted': 'Weighted',
     'gating': 'Gating',
-    # Keep old mappings for backward compatibility
-    'deepseek_roberta_fusion_concat': 'Concat',
-    'deepseek_roberta_fusion_average': 'Average',
-    'deepseek_roberta_fusion_weighted': 'Weighted',
-    'deepseek_roberta_fusion_gating': 'Gating',
+    'Gating': 'Gating',
 }
 
 def create_all_directories():
