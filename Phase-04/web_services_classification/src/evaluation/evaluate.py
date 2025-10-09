@@ -633,12 +633,13 @@ class ModelEvaluator:
             title_prefix = "DeepSeek Models"
             feature_types = ["raw_text"]
         elif model_type.lower() == "fusion":
-            models = ["DeepSeek_RoBERTa_Fusion_Concat", "DeepSeek_RoBERTa_Fusion_Average", 
-                      "DeepSeek_RoBERTa_Fusion_Weighted", "DeepSeek_RoBERTa_Fusion_Gating"]
+            # Fusion uses single base model name with different feature types (fusion strategies)
+            models = ["DeepSeek_RoBERTa_Fusion"]
             results_paths = RESULTS_CONFIG["fusion_category_paths"]
             save_dir = RESULTS_CONFIG["fusion_comparisons_path"]
             title_prefix = "Fusion Models"
-            feature_types = ["fusion"]
+            # Feature types are the fusion strategies: Concat, Average, Weighted, Gating
+            feature_types = ["Concat", "Average", "Weighted", "Gating"]
         else:
             logger.warning(f"Unknown model type: {model_type}")
             return
