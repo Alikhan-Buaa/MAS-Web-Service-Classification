@@ -1,6 +1,6 @@
 """
 Enhanced Overall Performance Comparison Module
-Combines ML, DL, BERT, and DeepSeek model results for comprehensive analysis
+Combines ML, DL, BERT, DeepSeek, and Fusion model results for comprehensive analysis
 """
 
 import pandas as pd
@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class OverallPerformanceAnalyzer:
-    """Enhanced analyzer for combined ML, DL, BERT, and DeepSeek model performance"""
+    """Enhanced analyzer for combined ML, DL, BERT, DeepSeek, and Fusion model performance"""
     
     def __init__(self):
         # Create overall results directory
@@ -36,16 +36,23 @@ class OverallPerformanceAnalyzer:
             "bilstm": "BiLSTM",
             "roberta_base": "RoBERTa-Base",
             "roberta_large": "RoBERTa-Large",
-            "deepseek_7b_base": "DeepSeek-7B-Base"
+            "deepseek_7b_base": "DeepSeek-7B-Base",
+            # Fusion patterns
+            "deepseek_roberta_fusion": "DeepSeek-RoBERTa-Fusion",
+            "deepseek_roberta_fusion_concat": "DeepSeek-RoBERTa-Fusion-Concat",
+            "deepseek_roberta_fusion_average": "DeepSeek-RoBERTa-Fusion-Average",
+            "deepseek_roberta_fusion_weighted": "DeepSeek-RoBERTa-Fusion-Weighted",
+            "deepseek_roberta_fusion_gating": "DeepSeek-RoBERTa-Fusion-Gating"
         }
         
     def load_all_results(self):
-        """Load ML, DL, BERT, and DeepSeek results"""
+        """Load ML, DL, BERT, DeepSeek, and Fusion results"""
         results = {
             'ml': None,
             'dl': None, 
             'bert': None,
-            'deepseek': None
+            'deepseek': None,
+            'fusion': None
         }
         
         # Define result files for each model type
@@ -53,7 +60,8 @@ class OverallPerformanceAnalyzer:
             'ml': RESULTS_CONFIG["ml_comparisons_path"] / "ml_final_results.pkl",
             'dl': RESULTS_CONFIG["dl_comparisons_path"] / "dl_final_results.pkl",
             'bert': RESULTS_CONFIG["bert_comparisons_path"] / "bert_final_results.pkl",
-            'deepseek': RESULTS_CONFIG["deepseek_comparisons_path"] / "deepseek_final_results.pkl"
+            'deepseek': RESULTS_CONFIG["deepseek_comparisons_path"] / "deepseek_final_results.pkl",
+            'fusion': RESULTS_CONFIG["fusion_comparisons_path"] / "fusion_final_results.pkl"
         }
         
         # Load each result type
@@ -96,8 +104,8 @@ class OverallPerformanceAnalyzer:
                             if normalized_entry:
                                 normalized[n_categories].append(normalized_entry)
                 
-                elif model_type in ['bert', 'deepseek']:
-                    # BERT/DeepSeek format: dictionary with model_feature keys
+                elif model_type in ['bert', 'deepseek', 'fusion']:
+                    # BERT/DeepSeek/Fusion format: dictionary with model_feature keys
                     if isinstance(category_data, dict):
                         for model_key, model_data in category_data.items():
                             normalized_entry = self._normalize_entry(model_data, model_type, model_key)
@@ -114,7 +122,7 @@ class OverallPerformanceAnalyzer:
         try:
             # Extract model name and feature type
             if model_key:
-                # For BERT/DeepSeek: model_key like "RoBERTa_Base_raw_text"
+                # For BERT/DeepSeek/Fusion: model_key like "RoBERTa_Base_raw_text" or "DeepSeek_RoBERTa_Fusion_Concat"
                 parts = model_key.split('_')
                 if len(parts) >= 2:
                     model_name = '_'.join(parts[:-1])  # Everything except last part
@@ -201,7 +209,8 @@ class OverallPerformanceAnalyzer:
             'ML': ['#1f77b4', '#ff7f0e', '#2ca02c'],      # Blue tones
             'DL': ['#d62728', '#9467bd', '#8c564b'],      # Red/purple tones  
             'BERT': ['#e377c2', '#7f7f7f', '#bcbd22'],    # Pink/gray tones
-            'DEEPSEEK': ['#17becf', '#ff9896', '#c5b0d5'] # Cyan/light tones
+            'DEEPSEEK': ['#17becf', '#ff9896', '#c5b0d5'], # Cyan/light tones
+            'FUSION': ['#28a745', '#ffc107', '#dc3545', '#6c757d']  # Green/yellow/red/gray for 4 fusion types
         }
         
         metrics_config = {
@@ -219,7 +228,7 @@ class OverallPerformanceAnalyzer:
         for metric, ylabel in metrics_config.items():
             plt.figure(figsize=(16, 10))
             
-            color_indices = {'ML': 0, 'DL': 0, 'BERT': 0, 'DEEPSEEK': 0}
+            color_indices = {'ML': 0, 'DL': 0, 'BERT': 0, 'DEEPSEEK': 0, 'FUSION': 0}
             
             for model, features in combined_metrics.items():
                 for feature_type, data in features.items():
@@ -235,7 +244,7 @@ class OverallPerformanceAnalyzer:
                     color_indices[model_type] += 1
                     
                     # Different line styles for different model types
-                    linestyles = {'ML': '-', 'DL': '--', 'BERT': '-.', 'DEEPSEEK': ':'}
+                    linestyles = {'ML': '-', 'DL': '--', 'BERT': '-.', 'DEEPSEEK': ':', 'FUSION': '-'}
                     linestyle = linestyles.get(model_type, '-')
                     
                     plt.plot(data['n'], data[metric], marker='o', label=label, 
@@ -250,7 +259,7 @@ class OverallPerformanceAnalyzer:
             
             plot_path = self.overall_dir / f"Overall_Comparison_{metric}.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            print(f"Combined line plot saved: {plot_path}")
+            print(f"✓ Combined line plot saved: {plot_path}")
             plt.close()
     
     def generate_summary_comparison(self, all_results):
@@ -292,7 +301,7 @@ class OverallPerformanceAnalyzer:
             # Save comprehensive summary
             summary_path = self.overall_dir / "Overall_Performance_Summary.csv"
             summary_df.to_csv(summary_path, index=False)
-            print(f"Overall summary table saved: {summary_path}")
+            print(f"✓ Overall summary table saved: {summary_path}")
             
             # Generate enhanced analysis
             print(f"\n{'='*80}")
@@ -304,16 +313,16 @@ class OverallPerformanceAnalyzer:
             for metric in ['Accuracy', 'F1-Score', 'Top-1', 'Top-3', 'Top-5']:
                 if metric in summary_df.columns and summary_df[metric].max() > 0:
                     best = summary_df.loc[summary_df[metric].idxmax()]
-                    print(f"  {metric:12}: {best['Model']:20} ({best['Model_Type']:8}, {best['Feature']:8}) "
+                    print(f"  {metric:12}: {best['Model']:25} ({best['Model_Type']:8}, {best['Feature']:8}) "
                           f"on {best['Categories']:2} categories = {best[metric]:.4f}")
             
             # Best by model type
             print(f"\nBest Performer by Model Type:")
-            for model_type in ['ML', 'DL', 'BERT', 'DEEPSEEK']:
+            for model_type in ['ML', 'DL', 'BERT', 'DEEPSEEK', 'FUSION']:
                 type_data = summary_df[summary_df['Model_Type'] == model_type]
                 if len(type_data) > 0:
                     best_row = type_data.loc[type_data['Top-1'].idxmax()]
-                    print(f"  {model_type:8}: {best_row['Model']:20} ({best_row['Feature']:8}) "
+                    print(f"  {model_type:8}: {best_row['Model']:25} ({best_row['Feature']:8}) "
                           f"on {best_row['Categories']:2} categories")
                     print(f"           Top-1: {best_row['Top-1']:.4f}, F1: {best_row['F1-Score']:.4f}, "
                           f"Training: {best_row['Training_Time']:.2f}s")
@@ -345,8 +354,8 @@ class OverallPerformanceAnalyzer:
         return summary_df
     
     def generate_all_comparisons(self):
-        """Generate all overall comparison visualizations including BERT and DeepSeek"""
-        print("Starting Comprehensive Performance Analysis (ML + DL + BERT + DeepSeek)...")
+        """Generate all overall comparison visualizations including BERT, DeepSeek, and Fusion"""
+        print("Starting Comprehensive Performance Analysis (ML + DL + BERT + DeepSeek + Fusion)...")
         
         # Load all results
         all_results = self.load_all_results()
@@ -386,7 +395,7 @@ class OverallPerformanceAnalyzer:
             
         # Debug information
         print(f"\nDEBUG: Result file check:")
-        for model_type in ['ml', 'dl', 'bert', 'deepseek']:
+        for model_type in ['ml', 'dl', 'bert', 'deepseek', 'fusion']:
             file_path = RESULTS_CONFIG[f"{model_type}_comparisons_path"] / f"{model_type}_final_results.pkl"
             status = "EXISTS" if file_path.exists() else "MISSING"
             print(f"  {model_type.upper():8}: {file_path} - {status}")
