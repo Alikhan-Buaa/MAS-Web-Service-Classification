@@ -5,8 +5,12 @@
   "model_name": "all-MiniLM-L6-v2",
   "config": {
     "model_name": "all-MiniLM-L6-v2",
-    "show_progress_bar": true,
+    "max_length": 512,
     "batch_size": 32,
-    "normalize_embeddings": true
+    "device": "cpu",
+    "normalize_embeddings": true,
+    "show_progress_bar": true,
+    "convert_to_tensor": false,
+    "convert_to_numpy": true
   }
 }

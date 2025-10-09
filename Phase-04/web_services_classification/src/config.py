@@ -345,7 +345,7 @@ FUSION_CONFIG = {
     'feature_types': ['Concat', 'Average', 'Weighted', 'Gating'],  # Standardized feature type names
     'common_dim': 768,  # Common embedding dimension
     'max_length': 128,
-    'num_train_epochs': 10,
+    'num_train_epochs': 15,
     'batch_size': 8,
     'eval_batch_size': 16,
     'learning_rate': 1e-5,
