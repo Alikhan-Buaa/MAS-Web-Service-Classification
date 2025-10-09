@@ -9,6 +9,10 @@
       1,
       2
     ],
-    "stop_words": "english"
+    "min_df": 2,
+    "max_df": 0.95,
+    "use_idf": true,
+    "smooth_idf": true,
+    "sublinear_tf": true
   }
 }
