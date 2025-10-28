@@ -261,6 +261,69 @@ class OverallPerformanceAnalyzer:
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
             print(f"✓ Combined line plot saved: {plot_path}")
             plt.close()
+
+
+    def generate_combined_bar_plots(self, combined_metrics):
+        """Generate bar plots comparing all model types (mean values)"""
+        print("\nGenerating combined BAR plots for all model types...")
+    
+        # Define colors for different model types
+        model_colors = {
+            'ML': ['#1f77b4', '#ff7f0e', '#2ca02c'],      
+            'DL': ['#d62728', '#9467bd', '#8c564b'],      
+            'BERT': ['#e377c2', '#7f7f7f', '#bcbd22'],    
+            'DEEPSEEK': ['#17becf', '#ff9896', '#c5b0d5'], 
+            'FUSION': ['#28a745', '#ffc107', '#dc3545', '#6c757d']  
+        }
+    
+        metrics_config = {
+            'accuracy': 'Accuracy',
+            'precision': 'Precision (Macro)',
+            'recall': 'Recall (Macro)', 
+            'f1_score': 'F1-Score (Macro)',
+            'top1_accuracy': 'Top-1 Accuracy',
+            'top3_accuracy': 'Top-3 Accuracy',
+            'top5_accuracy': 'Top-5 Accuracy',
+            'training_time': 'Training Time (seconds)',
+            'inference_time': 'Inference Time (seconds)'
+        }
+    
+    
+        for metric, ylabel in metrics_config.items():
+            plt.figure(figsize=(18, 10))
+    
+            bar_labels = []
+            bar_values = []
+            bar_colors = []
+    
+            # Collect bar data
+            for model, features in combined_metrics.items():
+                for feature_type, data in features.items():
+                    if metric not in data or len(data[metric]) == 0:
+                        continue
+    
+                    label = f"{model}-{feature_type.upper()}"
+                    bar_labels.append(label)
+                    bar_values.append(np.mean(data[metric]))
+    
+                    model_type = data['model_type']
+                    bar_colors.append(model_colors.get(model_type, ['#000000'])[0])
+    
+            # Create bar chart
+            x_positions = np.arange(len(bar_labels))
+            plt.bar(x_positions, bar_values, color=bar_colors, alpha=0.85)
+    
+            plt.xticks(x_positions, bar_labels, rotation=45, ha='right', fontsize=10)
+            plt.ylabel(ylabel, fontsize=14)
+            plt.title(f'Model Comparison (BAR): {ylabel} (Average)', fontsize=16, fontweight='bold')
+            plt.grid(axis='y', linestyle='--', alpha=0.4)
+            plt.tight_layout()
+    
+            bar_plot_path = self.overall_dir / f"Overall_BAR_{metric}.png"
+            plt.savefig(bar_plot_path, dpi=300, bbox_inches='tight')
+            print(f"✓ Bar plot saved: {bar_plot_path}")
+            plt.close()
+
     
     def generate_summary_comparison(self, all_results):
         """Generate enhanced summary comparison tables"""
@@ -382,6 +445,13 @@ class OverallPerformanceAnalyzer:
                 print("✓ Line plots generated")
             except Exception as e:
                 logger.error(f"Error generating line plots: {e}")
+
+            # Generate all visualizations
+            try:
+                self.generate_combined_bar_plots(combined_metrics)
+                print("✓ Bar plots generated")
+            except Exception as e:
+                logger.error(f"Error generating Bar plots: {e}")
             
             try:
                 self.generate_summary_comparison(all_results)
