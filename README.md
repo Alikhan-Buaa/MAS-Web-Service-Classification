@@ -27,46 +27,46 @@
 10. **Analysis:** Cross-model comparison, ranking quality, and category difficulty.
 
 
-## 🔹 Steps for Phase-04
+##  Steps for Phase-04
 
 ```bash
-# 1️⃣ Clone the repository
+# 1️ Clone the repository
 git clone git@github.com:Alikhan-Buaa/MAS-Web-Service-Classification.git
 
-# 2️⃣ Navigate to the Phase-04 directory
+# 2️ Navigate to the Phase-04 directory
 cd MAS-Web-Service-Classification/Phase-04/web_services_classification/
 
-# 3️⃣ Install dependencies
+# 3️ Install dependencies
 pip install -r ./requirements.txt
 
-# 4️⃣ Download necessary NLTK resources
+# 4️ Download necessary NLTK resources
 python -m nltk.downloader punkt stopwords wordnet
 
-# 5️⃣ Run each phase step-by-step
+# 5️ Run each phase step-by-step
 
-# 🧩 Data Analysis Phase
+# 6 Data Analysis Phase
 python ./main.py --phase analysis
 
-# 🧹 Preprocessing Phase
+# 7 Preprocessing Phase
 python ./main.py --phase preprocessing
 
-# 🔠 Feature Extraction Phase
+# 8 Feature Extraction Phase
 python ./main.py --phase features
 
-# ⚙️ Machine Learning Training Phase
+# 9 Machine Learning Training Phase
 python ./main.py --phase ml_training
 
-# 🧠 Deep Learning Training Phase
+# 10 Deep Learning Training Phase
 python ./main.py --phase dl_training
 
-# 🤖 BERT Training Phase
+# 11 BERT Training Phase
 python ./main.py --phase bert_training
 
-# 🔗 Fusion Model Training Phase
+# 12 Fusion Model Training Phase
 python ./main.py --phase fusion_training
 
-# 📊 Evaluation Phase
+# 13 Evaluation Phase
 python ./main.py --phase evaluation
 
-# 📈 Visualization Phase
+# 14 Visualization Phase
 python ./main.py --phase visualize
