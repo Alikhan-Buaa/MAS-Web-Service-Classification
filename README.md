@@ -12,3 +12,61 @@
 8. Benchmarking: Leaderboards, Top-K curves, and confusion matrices.
 9. Total models trained: 40 (30 ML + 10 DL).
 10. Analysis includes cross-model comparison, ranking quality, and category difficulty.
+
+## Phase-04
+
+1. **Objective:** Establish baseline performance for web service classification.
+2. **Dataset:** Top-N categories (50).
+3. **Models:** ML (Logistic Regression, Random Forest, XGBoost), DL (BiLSTM), RoBERTa (Small & Large), Fusion (DeepSeek + RoBERTa + Classifier).
+4. **Features:** TF-IDF and SBERT embeddings.
+5. **Evaluation:** Top-1, Top-3, Top-5 accuracy, Macro/Micro F1, and confusion matrices.
+6. **Balanced Datasets:** Fixed 80/10/10 train/validation/test splits.
+7. **Reproducibility:** Configurations stored in YAML files.
+8. **Benchmarking:** Leaderboards, Top-K curves, and confusion matrices.
+9. **Total Models Trained:** 40 (30 ML + 10 DL).
+10. **Analysis:** Cross-model comparison, ranking quality, and category difficulty.
+
+
+## 🔹 Steps for Phase-04
+
+```bash
+# 1️⃣ Clone the repository
+git clone git@github.com:Alikhan-Buaa/MAS-Web-Service-Classification.git
+
+# 2️⃣ Navigate to the Phase-04 directory
+cd MAS-Web-Service-Classification/Phase-04/web_services_classification/
+
+# 3️⃣ Install dependencies
+pip install -r ./requirements.txt
+
+# 4️⃣ Download necessary NLTK resources
+python -m nltk.downloader punkt stopwords wordnet
+
+# 5️⃣ Run each phase step-by-step
+
+# 🧩 Data Analysis Phase
+python ./main.py --phase analysis
+
+# 🧹 Preprocessing Phase
+python ./main.py --phase preprocessing
+
+# 🔠 Feature Extraction Phase
+python ./main.py --phase features
+
+# ⚙️ Machine Learning Training Phase
+python ./main.py --phase ml_training
+
+# 🧠 Deep Learning Training Phase
+python ./main.py --phase dl_training
+
+# 🤖 BERT Training Phase
+python ./main.py --phase bert_training
+
+# 🔗 Fusion Model Training Phase
+python ./main.py --phase fusion_training
+
+# 📊 Evaluation Phase
+python ./main.py --phase evaluation
+
+# 📈 Visualization Phase
+python ./main.py --phase visualize
