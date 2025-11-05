@@ -1,0 +1,30 @@
+# explain_fusion_shap.py
+import shap, torch
+import matplotlib.pyplot as plt
+from fusion_models import FusionModel
+
+# Load trained fusion model
+model_path = "Phase-04/web_services_classification/models/saved_models/fusion_models/top_50_categories/DeepSeek_RoBERTa_Fusion_Concat_top_50_categories_model.model"
+model = torch.load(model_path, map_location='cpu')
+model.eval()
+
+# Prepare background and test samples
+x_text = torch.load("sample_text_embeddings.pt")
+x_aux  = torch.load("sample_aux_features.pt")
+
+background = [x_text[:20], x_aux[:20]]
+test_batch = [x_text[21:26], x_aux[21:26]]
+
+# Define model wrapper
+def predict(inputs):
+    x1, x2 = inputs
+    with torch.no_grad():
+        return torch.softmax(model(x1, x2), dim=1).numpy()
+
+# SHAP explanation
+explainer = shap.DeepExplainer(model, background)
+shap_values = explainer.shap_values(test_batch)
+
+# Global importance
+shap.summary_plot(shap_values, show=False)
+plt.savefig("fusion_shap_summary.png", dpi=300)
