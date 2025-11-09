@@ -1,0 +1,146 @@
+[
+  {
+    "example_id": 0,
+    "true_label": "rec.autos",
+    "pred_label": "rec.autos",
+    "confidence": 0.21957573721513857,
+    "top_features": [
+      {
+        "feature": "models",
+        "shap_value": 0.3784279406584587
+      },
+      {
+        "feature": "89",
+        "shap_value": 0.24867023464016513
+      },
+      {
+        "feature": "car",
+        "shap_value": -0.2151095198590067
+      },
+      {
+        "feature": "model",
+        "shap_value": 0.21280379241681724
+      },
+      {
+        "feature": "early",
+        "shap_value": 0.20405871433406125
+      },
+      {
+        "feature": "value",
+        "shap_value": 0.2011212905628491
+      },
+      {
+        "feature": "performance",
+        "shap_value": 0.18465942285331818
+      },
+      {
+        "feature": "book",
+        "shap_value": -0.10683678467660372
+      },
+      {
+        "feature": "tell",
+        "shap_value": -0.09020329955279781
+      },
+      {
+        "feature": "words",
+        "shap_value": -0.08946365180474032
+      }
+    ]
+  },
+  {
+    "example_id": 1,
+    "true_label": "comp.windows.x",
+    "pred_label": "rec.motorcycles",
+    "confidence": 0.22634224582302506,
+    "top_features": [
+      {
+        "feature": "face",
+        "shap_value": 0.7037213355971712
+      },
+      {
+        "feature": "ve",
+        "shap_value": 0.2835123086455665
+      },
+      {
+        "feature": "got",
+        "shap_value": 0.27299477951531836
+      },
+      {
+        "feature": "folks",
+        "shap_value": 0.17612527967492436
+      },
+      {
+        "feature": "bike",
+        "shap_value": -0.14361750318323635
+      },
+      {
+        "feature": "ll",
+        "shap_value": 0.13229834033083818
+      },
+      {
+        "feature": "little",
+        "shap_value": 0.11229003531759951
+      },
+      {
+        "feature": "box",
+        "shap_value": -0.10971361555656019
+      },
+      {
+        "feature": "dod",
+        "shap_value": -0.10513304691939927
+      },
+      {
+        "feature": "format",
+        "shap_value": -0.10292377193829531
+      }
+    ]
+  },
+  {
+    "example_id": 2,
+    "true_label": "alt.atheism",
+    "pred_label": "talk.religion.misc",
+    "confidence": 0.13109708763406697,
+    "top_features": [
+      {
+        "feature": "word",
+        "shap_value": 0.9916514327500313
+      },
+      {
+        "feature": "yes",
+        "shap_value": 0.32089475686754454
+      },
+      {
+        "feature": "use",
+        "shap_value": 0.0318407246131156
+      },
+      {
+        "feature": "thanks",
+        "shap_value": 0.031730112950504846
+      },
+      {
+        "feature": "year",
+        "shap_value": 0.02481418989330988
+      },
+      {
+        "feature": "car",
+        "shap_value": 0.024007221770140894
+      },
+      {
+        "feature": "like",
+        "shap_value": 0.0175313091173586
+      },
+      {
+        "feature": "edu",
+        "shap_value": 0.01665323349463078
+      },
+      {
+        "feature": "moral",
+        "shap_value": -0.014378983733552885
+      },
+      {
+        "feature": "course",
+        "shap_value": 0.013739280290499147
+      }
+    ]
+  }
+]

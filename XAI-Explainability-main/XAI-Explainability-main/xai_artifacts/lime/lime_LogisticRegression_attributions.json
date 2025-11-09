@@ -1,0 +1,122 @@
+[
+  {
+    "example_id": 0,
+    "true_label": "rec.autos",
+    "pred_label": "rec.autos",
+    "confidence": 0.21957573721513857,
+    "top_tokens": [
+      {
+        "token": "book",
+        "weight": 0.021386419332053454
+      },
+      {
+        "token": "features",
+        "weight": 0.00995585546823468
+      },
+      {
+        "token": "differences",
+        "weight": 0.008732766498731037
+      },
+      {
+        "token": "heard",
+        "weight": -0.00834702044527625
+      },
+      {
+        "token": "year",
+        "weight": -0.008189976326432861
+      },
+      {
+        "token": "SE",
+        "weight": -0.007632337493339205
+      },
+      {
+        "token": "models",
+        "weight": -0.007018982715638278
+      },
+      {
+        "token": "time",
+        "weight": -0.005991279078554411
+      },
+      {
+        "token": "value",
+        "weight": -0.0057335231873998
+      },
+      {
+        "token": "far",
+        "weight": 0.002701873665515179
+      }
+    ]
+  },
+  {
+    "example_id": 1,
+    "true_label": "comp.windows.x",
+    "pred_label": "rec.motorcycles",
+    "confidence": 0.22634224582302506,
+    "top_tokens": [
+      {
+        "token": "format",
+        "weight": 0.08959272906469568
+      },
+      {
+        "token": "Face",
+        "weight": -0.06130035083628429
+      },
+      {
+        "token": "ve",
+        "weight": 0.047406447337498527
+      },
+      {
+        "token": "looking",
+        "weight": 0.039957380107229365
+      },
+      {
+        "token": "make",
+        "weight": -0.021261463209196724
+      },
+      {
+        "token": "folks",
+        "weight": -0.017641720292267602
+      },
+      {
+        "token": "seeing",
+        "weight": -0.01644365662749975
+      },
+      {
+        "token": "hope",
+        "weight": 0.010302239926324744
+      },
+      {
+        "token": "ll",
+        "weight": 0.010069816387479601
+      },
+      {
+        "token": "handle",
+        "weight": 0.0066801034735729575
+      }
+    ]
+  },
+  {
+    "example_id": 2,
+    "true_label": "alt.atheism",
+    "pred_label": "talk.religion.misc",
+    "confidence": 0.13109708763406697,
+    "top_tokens": [
+      {
+        "token": "word",
+        "weight": -0.040395252098179624
+      },
+      {
+        "token": "yes",
+        "weight": 0.030684490001165566
+      },
+      {
+        "token": "a",
+        "weight": 0.0015259774784227695
+      },
+      {
+        "token": "In",
+        "weight": 0.0012360574691503675
+      }
+    ]
+  }
+]
