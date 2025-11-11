@@ -324,6 +324,9 @@ class ModelEvaluator:
             
             print("  → Generating bar plots...")
             self._generate_bar_plots(final_results, charts_dir, model_type)
+
+            print("  → Generating stacked bar plots...")
+            self._generate_stacked_bar_plots(final_results, charts_dir, model_type)
             
             print("  → Generating summary statistics...")
             self._generate_summary_statistics(final_results, charts_dir, model_type)
@@ -761,3 +764,408 @@ class ModelEvaluator:
         if show_plots:
             plt.show()
         plt.close()
+
+    def _generate_stacked_bar_plots(self, final_results, charts_dir, model_type):
+        """Generate stacked bar plots for individual category sizes and overall comparison"""
+        print(f"\nGenerating {model_type.upper()} stacked bar plots...")
+        
+        # 1. Top-K Accuracy Stacked Bars (Individual)
+        self._generate_topk_stacked_bars_individual(final_results, charts_dir, model_type)
+        
+        # 2. Performance Metrics Stacked Bars (Individual)
+        self._generate_metrics_stacked_bars_individual(final_results, charts_dir, model_type)
+        
+        # 3. Top-K Accuracy Stacked Bars (Overall)
+        self._generate_topk_stacked_bars_overall(final_results, charts_dir, model_type)
+        
+        # 4. Performance Metrics Stacked Bars (Overall)
+        self._generate_metrics_stacked_bars_overall(final_results, charts_dir, model_type)
+
+    def _generate_topk_stacked_bars_individual(self, final_results, charts_dir, model_type):
+        """Generate Top-K accuracy stacked bars for each category size"""
+        print(f"  → Generating Top-K stacked bars for individual category sizes...")
+        
+        for n_categories, model_results_dict in final_results.items():
+            if not model_results_dict:
+                continue
+            
+            plot_data = {
+                'model_label': [],
+                'top1_accuracy': [],
+                'top3_gain': [],
+                'top5_gain': []
+            }
+            
+            for model_key, result in model_results_dict.items():
+                model_name = result.get('model_name', 'Unknown')
+                feature_type = result.get('feature_type', 'unknown')
+                label = f"{model_name}\n({feature_type.upper()})"
+                
+                top1 = result.get('top1_accuracy', result.get('accuracy', 0))
+                top3 = result.get('top3_accuracy', 0)
+                top5 = result.get('top5_accuracy', 0)
+                
+                plot_data['model_label'].append(label)
+                plot_data['top1_accuracy'].append(top1)
+                plot_data['top3_gain'].append(max(0, top3 - top1))
+                plot_data['top5_gain'].append(max(0, top5 - top3))
+            
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            x_pos = np.arange(len(plot_data['model_label']))
+            width = 0.6
+            
+            p1 = ax.bar(x_pos, plot_data['top1_accuracy'], width, 
+                    label='Top-1 Accuracy', color='#3498db', edgecolor='black', linewidth=1)
+            p2 = ax.bar(x_pos, plot_data['top3_gain'], width,
+                    bottom=plot_data['top1_accuracy'],
+                    label='Top-3 Gain', color='#2ecc71', edgecolor='black', linewidth=1)
+            
+            bottom_top5 = [plot_data['top1_accuracy'][i] + plot_data['top3_gain'][i] 
+                        for i in range(len(plot_data['top1_accuracy']))]
+            p3 = ax.bar(x_pos, plot_data['top5_gain'], width,
+                    bottom=bottom_top5,
+                    label='Top-5 Gain', color='#f39c12', edgecolor='black', linewidth=1)
+            
+            # Add value labels
+            for i, (t1, t3g, t5g) in enumerate(zip(plot_data['top1_accuracy'], 
+                                                    plot_data['top3_gain'], 
+                                                    plot_data['top5_gain'])):
+                if t1 > 0.05:
+                    ax.text(i, t1/2, f'{t1:.3f}', ha='center', va='center',
+                        fontsize=9, fontweight='bold', color='white')
+                
+                if t3g > 0.05:
+                    ax.text(i, t1 + t3g/2, f'+{t3g:.3f}', ha='center', va='center',
+                        fontsize=9, fontweight='bold', color='white')
+                
+                if t5g > 0.05:
+                    ax.text(i, t1 + t3g + t5g/2, f'+{t5g:.3f}', ha='center', va='center',
+                        fontsize=9, fontweight='bold', color='white')
+                
+                total = t1 + t3g + t5g
+                ax.text(i, total + 0.02, f'{total:.3f}', ha='center', va='bottom',
+                    fontsize=10, fontweight='bold', color='black')
+            
+            ax.set_xlabel('Model (Feature Type)', fontsize=13, fontweight='bold')
+            ax.set_ylabel('Cumulative Accuracy', fontsize=13, fontweight='bold')
+            ax.set_title(f'{model_type.upper()} Models: Stacked Top-K Accuracy - Top {n_categories} Categories',
+                        fontsize=15, fontweight='bold', pad=20)
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(plot_data['model_label'], fontsize=10, rotation=15, ha='right')
+            ax.set_ylim(0, 1.1)
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            ax.legend(loc='upper right', fontsize=11)
+            
+            plt.tight_layout()
+            
+            plot_path = charts_dir / f"{model_type.lower()}_stacked_bar_topk_top_{n_categories}_categories.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            print(f"    ✓ Top-K stacked bar saved: {plot_path}")
+            plt.close()
+
+    def _generate_metrics_stacked_bars_individual(self, final_results, charts_dir, model_type):
+        """Generate performance metrics stacked bars for each category size"""
+        print(f"  → Generating performance metrics stacked bars for individual category sizes...")
+        
+        for n_categories, model_results_dict in final_results.items():
+            if not model_results_dict:
+                continue
+            
+            plot_data = {
+                'model_label': [],
+                'accuracy': [],
+                'precision': [],
+                'recall': [],
+                'f1_score': []
+            }
+            
+            for model_key, result in model_results_dict.items():
+                model_name = result.get('model_name', 'Unknown')
+                feature_type = result.get('feature_type', 'unknown')
+                label = f"{model_name}\n({feature_type.upper()})"
+                
+                plot_data['model_label'].append(label)
+                plot_data['accuracy'].append(result.get('accuracy', 0))
+                plot_data['precision'].append(result.get('macro_precision', 0))
+                plot_data['recall'].append(result.get('macro_recall', 0))
+                plot_data['f1_score'].append(result.get('macro_f1', 0))
+            
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            x_pos = np.arange(len(plot_data['model_label']))
+            width = 0.6
+            
+            # Create stacked bars
+            p1 = ax.bar(x_pos, plot_data['accuracy'], width, 
+                    label='Accuracy', color='#3498db', edgecolor='black', linewidth=1)
+            p2 = ax.bar(x_pos, plot_data['precision'], width,
+                    bottom=plot_data['accuracy'],
+                    label='Precision', color='#e74c3c', edgecolor='black', linewidth=1)
+            
+            bottom_recall = [plot_data['accuracy'][i] + plot_data['precision'][i] 
+                            for i in range(len(plot_data['accuracy']))]
+            p3 = ax.bar(x_pos, plot_data['recall'], width,
+                    bottom=bottom_recall,
+                    label='Recall', color='#2ecc71', edgecolor='black', linewidth=1)
+            
+            bottom_f1 = [bottom_recall[i] + plot_data['recall'][i] 
+                        for i in range(len(bottom_recall))]
+            p4 = ax.bar(x_pos, plot_data['f1_score'], width,
+                    bottom=bottom_f1,
+                    label='F1-Score', color='#f39c12', edgecolor='black', linewidth=1)
+            
+            # Add value labels on each segment
+            for i in range(len(plot_data['model_label'])):
+                acc = plot_data['accuracy'][i]
+                prec = plot_data['precision'][i]
+                rec = plot_data['recall'][i]
+                f1 = plot_data['f1_score'][i]
+                
+                if acc > 0.05:
+                    ax.text(i, acc/2, f'{acc:.3f}', ha='center', va='center',
+                        fontsize=8, fontweight='bold', color='white')
+                
+                if prec > 0.05:
+                    ax.text(i, acc + prec/2, f'{prec:.3f}', ha='center', va='center',
+                        fontsize=8, fontweight='bold', color='white')
+                
+                if rec > 0.05:
+                    ax.text(i, acc + prec + rec/2, f'{rec:.3f}', ha='center', va='center',
+                        fontsize=8, fontweight='bold', color='white')
+                
+                if f1 > 0.05:
+                    ax.text(i, acc + prec + rec + f1/2, f'{f1:.3f}', ha='center', va='center',
+                        fontsize=8, fontweight='bold', color='white')
+                
+                # Total on top
+                total = acc + prec + rec + f1
+                ax.text(i, total + 0.05, f'{total:.2f}', ha='center', va='bottom',
+                    fontsize=10, fontweight='bold', color='black')
+            
+            ax.set_xlabel('Model (Feature Type)', fontsize=13, fontweight='bold')
+            ax.set_ylabel('Cumulative Metrics Score', fontsize=13, fontweight='bold')
+            ax.set_title(f'{model_type.upper()} Models: Stacked Performance Metrics - Top {n_categories} Categories',
+                        fontsize=15, fontweight='bold', pad=20)
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(plot_data['model_label'], fontsize=10, rotation=15, ha='right')
+            ax.set_ylim(0, max([plot_data['accuracy'][i] + plot_data['precision'][i] + 
+                                plot_data['recall'][i] + plot_data['f1_score'][i] 
+                                for i in range(len(plot_data['model_label']))]) + 0.2)
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            ax.legend(loc='upper right', fontsize=11)
+            
+            plt.tight_layout()
+            
+            plot_path = charts_dir / f"{model_type.lower()}_stacked_bar_metrics_top_{n_categories}_categories.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            print(f"    ✓ Metrics stacked bar saved: {plot_path}")
+            plt.close()
+
+    def _generate_topk_stacked_bars_overall(self, final_results, charts_dir, model_type):
+        """Generate overall Top-K accuracy stacked bar comparison across all category sizes"""
+        print(f"  → Generating overall Top-K stacked bar comparison...")
+        
+        overall_data = {}
+        
+        for n_categories, model_results_dict in final_results.items():
+            for model_key, result in model_results_dict.items():
+                model_name = result.get('model_name', 'Unknown')
+                feature_type = result.get('feature_type', 'unknown')
+                combo_key = f"{model_name}_{feature_type}"
+                
+                if combo_key not in overall_data:
+                    overall_data[combo_key] = {
+                        'model_name': model_name,
+                        'feature_type': feature_type,
+                        'categories': [],
+                        'top1': [],
+                        'top3': [],
+                        'top5': []
+                    }
+                
+                overall_data[combo_key]['categories'].append(int(n_categories))
+                overall_data[combo_key]['top1'].append(result.get('top1_accuracy', result.get('accuracy', 0)))
+                overall_data[combo_key]['top3'].append(result.get('top3_accuracy', 0))
+                overall_data[combo_key]['top5'].append(result.get('top5_accuracy', 0))
+        
+        if not overall_data:
+            return
+        
+        # Sort by categories
+        for key in overall_data:
+            indices = sorted(range(len(overall_data[key]['categories'])),
+                            key=lambda i: overall_data[key]['categories'][i])
+            for metric in ['categories', 'top1', 'top3', 'top5']:
+                overall_data[key][metric] = [overall_data[key][metric][i] for i in indices]
+        
+        # Create subplots
+        n_combos = len(overall_data)
+        n_cols = min(3, n_combos)
+        n_rows = (n_combos + n_cols - 1) // n_cols
+        
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(7*n_cols, 6*n_rows))
+        if n_combos == 1:
+            axes = [axes]
+        else:
+            axes = axes.flatten() if n_rows > 1 or n_cols > 1 else [axes]
+        
+        for idx, (combo_key, data) in enumerate(overall_data.items()):
+            ax = axes[idx]
+            
+            categories = data['categories']
+            top1 = data['top1']
+            top3 = data['top3']
+            top5 = data['top5']
+            
+            top3_gain = [max(0, t3 - t1) for t1, t3 in zip(top1, top3)]
+            top5_gain = [max(0, t5 - t3) for t3, t5 in zip(top3, top5)]
+            
+            x_pos = np.arange(len(categories))
+            width = 0.6
+            
+            p1 = ax.bar(x_pos, top1, width, label='Top-1',
+                    color='#3498db', edgecolor='black', linewidth=1)
+            p2 = ax.bar(x_pos, top3_gain, width, bottom=top1,
+                    label='Top-3 Gain', color='#2ecc71', edgecolor='black', linewidth=1)
+            
+            bottom_t5 = [top1[i] + top3_gain[i] for i in range(len(top1))]
+            p3 = ax.bar(x_pos, top5_gain, width, bottom=bottom_t5,
+                    label='Top-5 Gain', color='#f39c12', edgecolor='black', linewidth=1)
+            
+            # Add labels
+            for i, (t1, t3g, t5g) in enumerate(zip(top1, top3_gain, top5_gain)):
+                total = t1 + t3g + t5g
+                ax.text(i, total + 0.02, f'{total:.3f}', ha='center', va='bottom',
+                    fontsize=9, fontweight='bold')
+            
+            model_label = f"{data['model_name']} ({data['feature_type'].upper()})"
+            ax.set_title(model_label, fontsize=12, fontweight='bold')
+            ax.set_xlabel('Number of Categories', fontsize=11, fontweight='bold')
+            ax.set_ylabel('Cumulative Accuracy', fontsize=11, fontweight='bold')
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(categories, fontsize=10)
+            ax.set_ylim(0, 1.1)
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            ax.legend(loc='lower left', fontsize=9)
+        
+        # Hide extra subplots
+        for idx in range(len(overall_data), len(axes)):
+            axes[idx].set_visible(False)
+        
+        plt.suptitle(f'{model_type.upper()} Models: Overall Stacked Top-K Accuracy Comparison',
+                    fontsize=16, fontweight='bold', y=0.995)
+        plt.tight_layout()
+        
+        plot_path = charts_dir / f"{model_type.lower()}_stacked_bar_overall_topk_comparison.png"
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"    ✓ Overall Top-K stacked bar saved: {plot_path}")
+        plt.close()
+
+    def _generate_metrics_stacked_bars_overall(self, final_results, charts_dir, model_type):
+        """Generate overall performance metrics stacked bar comparison across all category sizes"""
+        print(f"  → Generating overall performance metrics stacked bar comparison...")
+        
+        overall_data = {}
+        
+        for n_categories, model_results_dict in final_results.items():
+            for model_key, result in model_results_dict.items():
+                model_name = result.get('model_name', 'Unknown')
+                feature_type = result.get('feature_type', 'unknown')
+                combo_key = f"{model_name}_{feature_type}"
+                
+                if combo_key not in overall_data:
+                    overall_data[combo_key] = {
+                        'model_name': model_name,
+                        'feature_type': feature_type,
+                        'categories': [],
+                        'accuracy': [],
+                        'precision': [],
+                        'recall': [],
+                        'f1_score': []
+                    }
+                
+                overall_data[combo_key]['categories'].append(int(n_categories))
+                overall_data[combo_key]['accuracy'].append(result.get('accuracy', 0))
+                overall_data[combo_key]['precision'].append(result.get('macro_precision', 0))
+                overall_data[combo_key]['recall'].append(result.get('macro_recall', 0))
+                overall_data[combo_key]['f1_score'].append(result.get('macro_f1', 0))
+        
+        if not overall_data:
+            return
+        
+        # Sort by categories
+        for key in overall_data:
+            indices = sorted(range(len(overall_data[key]['categories'])),
+                            key=lambda i: overall_data[key]['categories'][i])
+            for metric in ['categories', 'accuracy', 'precision', 'recall', 'f1_score']:
+                overall_data[key][metric] = [overall_data[key][metric][i] for i in indices]
+        
+        # Create subplots
+        n_combos = len(overall_data)
+        n_cols = min(3, n_combos)
+        n_rows = (n_combos + n_cols - 1) // n_cols
+        
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(7*n_cols, 6*n_rows))
+        if n_combos == 1:
+            axes = [axes]
+        else:
+            axes = axes.flatten() if n_rows > 1 or n_cols > 1 else [axes]
+        
+        for idx, (combo_key, data) in enumerate(overall_data.items()):
+            ax = axes[idx]
+            
+            categories = data['categories']
+            accuracy = data['accuracy']
+            precision = data['precision']
+            recall = data['recall']
+            f1_score = data['f1_score']
+            
+            x_pos = np.arange(len(categories))
+            width = 0.6
+            
+            p1 = ax.bar(x_pos, accuracy, width, label='Accuracy',
+                    color='#3498db', edgecolor='black', linewidth=1)
+            p2 = ax.bar(x_pos, precision, width, bottom=accuracy,
+                    label='Precision', color='#e74c3c', edgecolor='black', linewidth=1)
+            
+            bottom_rec = [accuracy[i] + precision[i] for i in range(len(accuracy))]
+            p3 = ax.bar(x_pos, recall, width, bottom=bottom_rec,
+                    label='Recall', color='#2ecc71', edgecolor='black', linewidth=1)
+            
+            bottom_f1 = [bottom_rec[i] + recall[i] for i in range(len(bottom_rec))]
+            p4 = ax.bar(x_pos, f1_score, width, bottom=bottom_f1,
+                    label='F1-Score', color='#f39c12', edgecolor='black', linewidth=1)
+            
+            # Add total labels
+            for i in range(len(categories)):
+                total = accuracy[i] + precision[i] + recall[i] + f1_score[i]
+                ax.text(i, total + 0.05, f'{total:.2f}', ha='center', va='bottom',
+                    fontsize=9, fontweight='bold')
+            
+            model_label = f"{data['model_name']} ({data['feature_type'].upper()})"
+            ax.set_title(model_label, fontsize=12, fontweight='bold')
+            ax.set_xlabel('Number of Categories', fontsize=11, fontweight='bold')
+            ax.set_ylabel('Cumulative Metrics', fontsize=11, fontweight='bold')
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(categories, fontsize=10)
+            max_total = max([accuracy[i] + precision[i] + recall[i] + f1_score[i] 
+                            for i in range(len(categories))])
+            ax.set_ylim(0, max_total + 0.3)
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            ax.legend(loc='upper left', fontsize=9)
+        
+        # Hide extra subplots
+        for idx in range(len(overall_data), len(axes)):
+            axes[idx].set_visible(False)
+        
+        plt.suptitle(f'{model_type.upper()} Models: Overall Stacked Performance Metrics Comparison',
+                    fontsize=16, fontweight='bold', y=0.995)
+        plt.tight_layout()
+        
+        plot_path = charts_dir / f"{model_type.lower()}_stacked_bar_overall_metrics_comparison.png"
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"    ✓ Overall metrics stacked bar saved: {plot_path}")
+        plt.close()
+
+
