@@ -18,6 +18,7 @@ from src.config import (
     CATEGORY_SIZES, LOGGING_CONFIG, RESULTS_CONFIG
 )
 from src.preprocessing.data_analysis import DataAnalyzer
+from src.preprocessing.enhanced_data_analysis import EnhancedDataAnalyzer
 from src.preprocessing.data_preprocessing import DataPreprocessor
 from src.preprocessing.feature_extraction import FeatureExtractor
 from src.modeling.ml_models import MLModelTrainer
@@ -182,6 +183,202 @@ class PipelineManager:
                 'error': str(e)
             }
             self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+
+    def run_enhanced_data_analysis_phase(self):
+        """
+        Run ENHANCED data analysis phase with comprehensive logging
+        
+        Performs COMPREHENSIVE analysis including:
+        
+        BASIC ANALYSIS:
+        - Overall dataset statistics and visualizations
+        - Top-N category analysis
+        - Text length and word count distributions
+        - Category distribution plots
+        - Basic per-category statistics
+        
+        ADVANCED ANALYSIS:
+        - Statistical tests (normality, chi-square, correlation)
+        - Class imbalance analysis with Gini coefficient
+        - Automated recommendations (SMOTE, class weights, etc.)
+        - TF-IDF feature importance per category
+        - Topic modeling with LDA
+        - Dimensionality reduction (PCA, t-SNE)
+        - Text complexity metrics (Flesch, lexical diversity)
+        - Feature correlation heatmaps
+        - Outlier detection with IQR method
+        
+        VISUALIZATIONS:
+        - 15+ standard plots
+        - 8+ advanced visualizations
+        - Lorenz curves
+        - Log-scale distributions
+        - Correlation heatmaps
+        - Topic importance plots
+        - PCA/t-SNE scatter plots
+        
+        Returns:
+            bool: True if analysis completed successfully
+        """
+        phase_name = "enhanced_data_analysis"
+        start_time = self.log_phase_start(phase_name)
+        
+        try:
+            
+            self.logger.info("Initializing ENHANCED data analyzer...")
+            self.logger.info("This will perform comprehensive analysis including:")
+            self.logger.info("  - Standard analysis (stats, distributions, categories)")
+            self.logger.info("  - Statistical tests (normality, correlation)")
+            self.logger.info("  - Class imbalance analysis (Gini, entropy)")
+            self.logger.info("  - TF-IDF feature importance")
+            self.logger.info("  - Topic modeling (LDA)")
+            self.logger.info("  - Dimensionality reduction (PCA, t-SNE)")
+            self.logger.info("  - Text complexity metrics")
+            self.logger.info("  - Feature correlations")
+            self.logger.info("  - Outlier detection")
+            
+            analyzer = EnhancedDataAnalyzer()
+            
+            self.logger.info("\nRunning comprehensive enhanced data analysis...")
+            results = analyzer.run_complete_analysis(run_advanced=True)
+            
+            self.results[phase_name] = {
+                'status': 'completed',
+                'mode': 'enhanced',
+                'summary': 'Enhanced data analysis with all advanced features completed successfully',
+                'outputs': {
+                    'overall_analysis': str(analyzer.overall_dir),
+                    'advanced_analysis': str(analyzer.advanced_dir),
+                    'topN_analysis': {n: str(d) for n, d in analyzer.topN_dir.items()}
+                },
+                'analyses_performed': {
+                    'basic': [
+                        'Overall dataset statistics',
+                        'Top-N category analysis',
+                        'Text length distribution',
+                        'Word count distribution',
+                        'Category distribution plots',
+                        'Per-category statistics'
+                    ],
+                    'advanced': [
+                        'Statistical tests (normality, chi-square, Pearson correlation)',
+                        'Class imbalance analysis (Gini coefficient, entropy, imbalance ratio)',
+                        'Recommendations for handling imbalance',
+                        'TF-IDF feature importance per category',
+                        'Topic modeling with LDA (5 topics)',
+                        'Dimensionality reduction (PCA & t-SNE)',
+                        'Text complexity metrics (Flesch reading ease, lexical diversity)',
+                        'Feature correlation analysis',
+                        'Outlier detection (IQR method)'
+                    ]
+                },
+                'visualizations_generated': {
+                    'standard': [
+                        'Text length distribution',
+                        'Word count distribution',
+                        'Word length distribution',
+                        'Category distribution',
+                        'Top-N category distributions',
+                        'Text length boxplots by category',
+                        'Word count boxplots by category'
+                    ],
+                    'advanced': [
+                        'Lorenz curve (class imbalance)',
+                        'Log-scale category distribution',
+                        'Sample distribution boxplot',
+                        'Cumulative percentage plot',
+                        'TF-IDF top features per category',
+                        'Topic modeling visualization',
+                        'PCA scatter plot with variance explained',
+                        't-SNE scatter plot',
+                        'Text complexity boxplots',
+                        'Feature correlation heatmap',
+                        'Outlier detection boxplots'
+                    ]
+                },
+                'files_generated': {
+                    'json': [
+                        'dataset_summary.json',
+                        'category_statistics_topN.json',
+                        'statistical_tests.json',
+                        'class_imbalance_analysis.json',
+                        'tfidf_analysis.json',
+                        'topic_modeling.json',
+                        'dimensionality_reduction_info.json',
+                        'outlier_analysis.json'
+                    ],
+                    'csv': [
+                        'category_statistics_topN.csv',
+                        'text_complexity_by_category.csv',
+                        'feature_correlation_matrix.csv'
+                    ],
+                    'png': [
+                        '15+ standard plots',
+                        '8+ advanced visualizations'
+                    ]
+                }
+            }
+            
+            self.log_phase_end(phase_name, start_time, success=True)
+            
+            self.logger.info("\n" + "=" * 70)
+            self.logger.info("✓ ENHANCED ANALYSIS COMPLETE")
+            self.logger.info("=" * 70)
+            self.logger.info(f"Overall analysis: {analyzer.overall_dir}")
+            self.logger.info(f"Advanced analysis: {analyzer.advanced_dir}")
+            self.logger.info(f"\nTop-N analysis directories:")
+            for n, path in analyzer.topN_dir.items():
+                self.logger.info(f"  - Top-{n}: {path}")
+            self.logger.info("=" * 70)
+            
+            # Log key findings from advanced analysis
+            self.logger.info("\n📊 KEY INSIGHTS:")
+            
+            # Check if imbalance analysis file exists
+            imbalance_file = analyzer.advanced_dir / "class_imbalance_analysis.json"
+            if imbalance_file.exists():
+                import json
+                with open(imbalance_file, 'r') as f:
+                    imbalance_data = json.load(f)
+                
+                self.logger.info(f"\n🔍 Class Imbalance:")
+                self.logger.info(f"  - Imbalance Ratio: {imbalance_data.get('imbalance_ratio', 'N/A'):.2f}")
+                self.logger.info(f"  - Gini Coefficient: {imbalance_data.get('gini_coefficient', 'N/A'):.3f}")
+                
+                recommendations = imbalance_data.get('recommendations', [])
+                if recommendations:
+                    self.logger.info(f"\n💡 Recommendations:")
+                    for rec in recommendations[:3]:  # Show first 3 recommendations
+                        self.logger.info(f"  - {rec}")
+            
+            self.logger.info("\n" + "=" * 70 + "\n")
+            
+            return results
+            
+        except ImportError as e:
+            self.logger.error(f"Enhanced analyzer module not found: {e}")
+            self.logger.error("Please ensure 'data_analysis_enhanced.py' is in your project directory")
+            
+            self.results[phase_name] = {
+                'status': 'failed',
+                'mode': 'enhanced',
+                'error': f"Module not found: {e}",
+                'error_type': 'ImportError',
+                'suggestion': 'Ensure data_analysis_enhanced.py is in the correct location'
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            raise
+            
+        except Exception as e:
+            self.results[phase_name] = {
+                'status': 'failed',
+                'mode': 'enhanced',
+                'error': str(e),
+                'error_type': type(e).__name__
+            }
+            self.log_phase_end(phase_name, start_time, success=False, error=e)
+            self.logger.error(f"✗ Enhanced data analysis failed: {e}", exc_info=True)
             raise
 
     def run_preprocessing_phase(self):
@@ -641,6 +838,7 @@ def main():
             pipeline.run_benchmark_generation_phase()
         elif args.phase == "analysis":
             pipeline.run_data_analysis_phase()
+            pipeline.run_enhanced_data_analysis_phase()
         elif args.phase == "preprocessing":
             pipeline.run_preprocessing_phase()
         elif args.phase == "features":
