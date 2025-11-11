@@ -323,17 +323,38 @@ class OverallPerformanceAnalyzer:
             plt.savefig(bar_plot_path, dpi=300, bbox_inches='tight')
             print(f"✓ Bar plot saved: {bar_plot_path}")
             plt.close()
+
+
     def generate_overall_stacked_bars(self, combined_metrics):
         """Generate overall stacked bar plots for all models"""
         print("\nGenerating overall stacked bar plots...")
         
+        # Flatten the nested structure first
+        flattened_metrics = self._flatten_combined_metrics(combined_metrics)
+        
+        if not flattened_metrics:
+            print("  No data available for stacked bars")
+            return
+        
         # 1. Top-K Stacked Bars
-        self._generate_overall_topk_stacked_bars(combined_metrics)
+        self._generate_overall_topk_stacked_bars(flattened_metrics)
         
         # 2. Performance Metrics Stacked Bars
-        self._generate_overall_metrics_stacked_bars(combined_metrics)
+        self._generate_overall_metrics_stacked_bars(flattened_metrics)
         
         print("✓ Overall stacked bar plots generated")
+
+    def _flatten_combined_metrics(self, combined_metrics):
+        """Flatten the nested combined_metrics structure for stacked bars"""
+        flattened = {}
+        
+        for model_key, feature_data in combined_metrics.items():
+            for feature_type, metrics in feature_data.items():
+                # Create a unique key combining model and feature
+                flat_key = f"{model_key}_{feature_type}"
+                flattened[flat_key] = metrics.copy()
+        
+        return flattened
 
     def _generate_overall_topk_stacked_bars(self, combined_metrics):
         """Generate Top-K accuracy stacked bars across all models"""
@@ -347,8 +368,16 @@ class OverallPerformanceAnalyzer:
             'FUSION': ['#9b59b6', '#8e44ad', '#7d3c98']
         }
         
+        # Get all unique category sizes
+        all_categories = set()
+        for data in combined_metrics.values():
+            if 'n' in data:
+                all_categories.update(data['n'])
+        
+        category_sizes = sorted(list(all_categories))
+        
         # Prepare data for each category size
-        for n_cat in CATEGORY_SIZES:
+        for n_cat in category_sizes:
             plot_data = {
                 'labels': [],
                 'top1': [],
@@ -358,15 +387,14 @@ class OverallPerformanceAnalyzer:
             }
             
             for model_key, data in combined_metrics.items():
-                if n_cat not in data['n']:
+                if 'n' not in data or n_cat not in data['n']:
                     continue
                 
                 idx = data['n'].index(n_cat)
-                model_parts = model_key.split('_')
-                model_type = data['model_type']
+                model_type = data.get('model_type', 'UNKNOWN')
                 
                 # Create label
-                label = f"{model_key.replace('_', ' ')}"
+                label = model_key.replace('_', ' ')
                 
                 top1 = data['top1_accuracy'][idx]
                 top3 = data['top3_accuracy'][idx]
@@ -440,8 +468,16 @@ class OverallPerformanceAnalyzer:
             'FUSION': ['#9b59b6', '#8e44ad', '#7d3c98']
         }
         
+        # Get all unique category sizes
+        all_categories = set()
+        for data in combined_metrics.values():
+            if 'n' in data:
+                all_categories.update(data['n'])
+        
+        category_sizes = sorted(list(all_categories))
+        
         # Prepare data for each category size
-        for n_cat in CATEGORY_SIZES:
+        for n_cat in category_sizes:
             plot_data = {
                 'labels': [],
                 'accuracy': [],
@@ -452,14 +488,14 @@ class OverallPerformanceAnalyzer:
             }
             
             for model_key, data in combined_metrics.items():
-                if n_cat not in data['n']:
+                if 'n' not in data or n_cat not in data['n']:
                     continue
                 
                 idx = data['n'].index(n_cat)
-                model_type = data['model_type']
+                model_type = data.get('model_type', 'UNKNOWN')
                 
                 # Create label
-                label = f"{model_key.replace('_', ' ')}"
+                label = model_key.replace('_', ' ')
                 
                 plot_data['labels'].append(label)
                 plot_data['accuracy'].append(data['accuracy'][idx])
@@ -532,10 +568,20 @@ class OverallPerformanceAnalyzer:
         """Generate stacked bars showing each model's performance across category sizes"""
         print("\nGenerating model-wise stacked bar comparisons...")
         
+        # Flatten the nested structure first
+        flattened_metrics = self._flatten_combined_metrics(combined_metrics)
+        
+        if not flattened_metrics:
+            print("  No data available for model-wise stacked bars")
+            return
+        
         # Group data by model
         model_data = {}
         
-        for model_key, data in combined_metrics.items():
+        for model_key, data in flattened_metrics.items():
+            if 'n' not in data or 'model_type' not in data:
+                continue
+                
             if model_key not in model_data:
                 model_data[model_key] = {
                     'model_name': model_key,
@@ -559,6 +605,10 @@ class OverallPerformanceAnalyzer:
                 model_data[model_key]['precision'].append(data['precision'][i])
                 model_data[model_key]['recall'].append(data['recall'][i])
                 model_data[model_key]['f1_score'].append(data['f1_score'][i])
+        
+        if not model_data:
+            print("  No valid model data for model-wise stacked bars")
+            return
         
         # Create subplots for Top-K comparison
         n_models = len(model_data)
