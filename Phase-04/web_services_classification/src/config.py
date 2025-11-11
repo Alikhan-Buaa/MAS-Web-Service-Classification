@@ -288,7 +288,8 @@ BERT_CONFIG = {
 
 # DeepSeek Models configuration
 DEEPSEEK_CONFIG = {
-    'model_type': 'deepseek',  # ← Added
+    'model_type': 'deepseek',  # ← Adde
+    'available_models': {"deepseek": "deepseek-ai/deepseek-llm-7b-base"},
     'models': [ 'deepseek-ai/deepseek-llm-7b-base'],
     'trust_remote_code': True,
     'max_length': 512,
